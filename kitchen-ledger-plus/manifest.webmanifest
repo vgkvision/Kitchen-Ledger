@@ -1,0 +1,10 @@
+{
+  "name": "Kitchen Ledger Plus",
+  "short_name": "Kitchen Ledger",
+  "description": "Family cookbook, menu planner, and shopping list.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3c3630",
+  "lang": "en"
+}
