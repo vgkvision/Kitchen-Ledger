@@ -4,6 +4,15 @@ A polished clone of the live family Kitchen Ledger app. The original `index.html
 
 Open `kitchen-ledger-plus/index.html` in a browser (or host this folder the same way you host the original). This copy uses the **same localStorage keys and family-sync format**, so on the same phone or computer it will show the real household data. Try it beside the original before you switch.
 
+## Two home-screen icons (iPad / iPhone)
+
+Use **Safari**, not Chrome. Add each URL separately:
+
+1. Live app: `https://vgkvision.github.io/Kitchen-Ledger/` → Add to Home Screen as **Kitchen Ledger**
+2. Plus (after the PR is merged): `https://vgkvision.github.io/Kitchen-Ledger/kitchen-ledger-plus/` → Add to Home Screen as **KL Plus**
+
+They share the same family data, so a change in one appears in the other. That is what you want while comparing. Do not tap **Start sharing** on Plus.
+
 ## What stayed the same
 
 Recipes, menu planner, rotation, suggestions, shopping list, insights, cooking mode, and family sharing all work the way they do today.
