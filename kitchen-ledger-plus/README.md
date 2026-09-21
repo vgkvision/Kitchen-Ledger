@@ -11,7 +11,7 @@ Use **Safari**, not Chrome. Add each URL separately:
 1. Live app: `https://vgkvision.github.io/Kitchen-Ledger/` → Add to Home Screen as **Kitchen Ledger**
 2. Plus (after the PR is merged): `https://vgkvision.github.io/Kitchen-Ledger/kitchen-ledger-plus/` → Add to Home Screen as **KL Plus**
 
-They share the same family data, so a change in one appears in the other. That is what you want while comparing. Do not tap **Start sharing** on Plus.
+Plus now saves its own copy. A dish added in Plus stays in Plus. To test with the family, use **Start sharing** inside Plus and send them the new sync code plus the Plus link. Do not paste the original Kitchen Ledger sync code into Plus, and do not paste the Plus code into the original app.
 
 ## What stayed the same
 

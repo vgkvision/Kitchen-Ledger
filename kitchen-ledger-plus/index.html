@@ -3,7 +3,7 @@
 <head>
 <script>
   try {
-    var savedTheme = localStorage.getItem('weeknight-theme-v1');
+    var savedTheme = localStorage.getItem('weeknight-plus-theme-v1');
     if (savedTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
   } catch (e) { /* ignore */ }
 </script>
@@ -1293,12 +1293,15 @@ const WATERMARK_PATHS = {
   dessert: '<path d="M60,110 L140,110 L130,165 Q100,175 70,165 Z"/><path d="M55,110 Q55,75 100,75 Q145,75 145,110 Z"/><circle cx="100" cy="55" r="10"/><path d="M100,65 L100,75" opacity="0.5"/><path d="M75,110 L80,165 M100,110 L100,168 M125,110 L120,165" opacity="0.4"/>',
 };
 
-const STORAGE_KEY = 'weeknight-rotation-v1';
-const MENU_KEY = 'weeknight-menu-v1';
-const COOKBOOKS_KEY = 'weeknight-cookbooks-v1';
-const SHOPPING_KEY = 'weeknight-shopping-v1';
-const CATEGORY_OVERRIDES_KEY = 'weeknight-category-overrides-v1';
-const LAST_SYNCED_KEY = 'weeknight-last-synced-v1';
+// Plus keeps its own saved data. These names are different on purpose from
+// the original Kitchen Ledger, so a test dish or a test family-sync cannot
+// write into the live app.
+const STORAGE_KEY = 'weeknight-plus-rotation-v1';
+const MENU_KEY = 'weeknight-plus-menu-v1';
+const COOKBOOKS_KEY = 'weeknight-plus-cookbooks-v1';
+const SHOPPING_KEY = 'weeknight-plus-shopping-v1';
+const CATEGORY_OVERRIDES_KEY = 'weeknight-plus-category-overrides-v1';
+const LAST_SYNCED_KEY = 'weeknight-plus-last-synced-v1';
 let sections = [];
 let menu = {};
 let knownCookbooks = [];
@@ -1334,7 +1337,7 @@ const DIETARY_TAGS = ['Vegetarian', 'Vegan', 'Gluten-Free', 'Dairy-Free', 'Nut-F
 const SPICE_LEVELS = ['Mild', 'Medium', 'Spicy'];
 let recipeSortMode = 'default';
 let recipeCuisinePick = 'all';
-const LAST_VIEW_KEY = 'weeknight-last-view-v1';
+const LAST_VIEW_KEY = 'weeknight-plus-last-view-v1';
 let activeView = 'recipes';
 let menuMode = 'week';
 let menuAnchor = new Date();
@@ -2224,7 +2227,7 @@ function addDish(sectionId, name, source) {
 // specific to this dish having actually been made and judged on its own.
 // Moves a dish to sit right before another dish within the same category,
 // via drag-and-drop. Dishes otherwise keep whatever order they were added in.
-const THEME_KEY = 'weeknight-theme-v1';
+const THEME_KEY = 'weeknight-plus-theme-v1';
 
 function currentTheme() {
   return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
@@ -3230,8 +3233,8 @@ function closePicker() {
 // ---------------------------------------------------------------
 // Cross-device sync via JSONBin.io (user's own free account/API key)
 // ---------------------------------------------------------------
-const SYNC_KEY_STORAGE = 'weeknight-sync-key';
-const SYNC_BIN_STORAGE = 'weeknight-sync-bin';
+const SYNC_KEY_STORAGE = 'weeknight-plus-sync-key';
+const SYNC_BIN_STORAGE = 'weeknight-plus-sync-bin';
 let syncPushTimer = null;
 
 function getSyncCreds() {
@@ -3279,7 +3282,7 @@ function updateSyncStatusIndicator() {
 // the debounced push below ever got a chance to fire — without this, closing
 // right after a change can let the next launch's automatic pull silently
 // overwrite that unsaved change with the older cloud copy.
-const PENDING_PUSH_KEY = 'weeknight-pending-push-v1';
+const PENDING_PUSH_KEY = 'weeknight-plus-pending-push-v1';
 function markPushPending() {
   try { localStorage.setItem(PENDING_PUSH_KEY, '1'); } catch (e) { /* ignore */ }
 }
@@ -3319,7 +3322,7 @@ function lastSyncedLabel() {
 // for both a bad key and an oversized record, and today's incident happened
 // specifically because this used to guess "bad key" for both.
 const JSONBIN_SIZE_LIMIT_KB = 100; // JSONBin's free-tier hard limit, per bin
-const UNDO_SYNC_KEY = 'weeknight-undo-sync-v1';
+const UNDO_SYNC_KEY = 'weeknight-plus-undo-sync-v1';
 function snapshotLocalState() {
   try {
     localStorage.setItem(UNDO_SYNC_KEY, JSON.stringify({
@@ -3664,7 +3667,7 @@ function renderSyncModal(status, activeTab) {
   if (isSyncConnected()) {
     modal.innerHTML = `
       <div class="picker-eyebrow">Shared with family</div>
-      <div class="sync-step">This device shares your rotation, recipes, and menu through your JSONBin.io store. Paste the same API key and sync code below on a family member's device to connect them too.</div>
+      <div class="sync-step">This is the Plus test copy only. The original Kitchen Ledger keeps its own share and will not see dishes you add here. Family members must open the Plus link and use this sync code.</div>
       <div class="sync-status">Sync code:</div>
       <div class="sync-code-box"><span class="sync-code">${escapeHtml(binId)}</span><button class="sync-copy-btn" data-action="copy-code">Copy</button></div>
       ${lastSyncedLabel() ? `<div class="sync-status">${escapeHtml(lastSyncedLabel())}</div>` : ''}
@@ -3693,12 +3696,13 @@ function renderSyncModal(status, activeTab) {
         <button class="sync-tab ${tab==='join'?'active':''}" data-action="sync-tab-join">Join a family member's</button>
       </div>
       <div class="sync-pane ${tab==='create'?'active':''}" id="syncPaneCreate">
-        <div class="sync-step">This device's current rotation, recipes, and menu become the shared copy. You'll get a sync code to give your family.</div>
+        <div class="sync-step">This starts a new share for Plus only. It does not change the original Kitchen Ledger. You'll get a new sync code — send that, and the Plus link, to your family. Do not paste this code into the original app.</div>
         ${syncSizeIndicatorHtml()}
         <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff;width:100%" data-action="sync-create">Start sharing</button>
       </div>
       <div class="sync-pane ${tab==='join'?'active':''}" id="syncPaneJoin">
-        <input class="sync-input" id="syncJoinCodeInput" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste sync code from your family member">
+        <div class="sync-step">Paste the Plus sync code only. The original Kitchen Ledger's sync code belongs to the live family app — connecting Plus to that code can overwrite it.</div>
+        <input class="sync-input" id="syncJoinCodeInput" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste the Plus sync code">
         <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff;width:100%" data-action="sync-join">Connect</button>
       </div>
       ${status ? `<div class="sync-status">${escapeHtml(status)}</div>` : ''}
@@ -3784,6 +3788,8 @@ function wireSyncModal() {
     const apiKey = document.getElementById('syncApiKeyInput').value.trim();
     const binId = document.getElementById('syncJoinCodeInput').value.trim();
     if (!apiKey || !binId) { renderSyncModal('Enter both your API key and the sync code.', 'join'); return; }
+    const connectPlusCode = window.confirm('Connect Plus to this sync code? Only continue if this code was created inside Plus. The original Kitchen Ledger sync code will let Plus write into the live family cookbook.');
+    if (!connectPlusCode) { renderSyncModal(null, 'join'); return; }
     renderSyncModal('Connecting…', 'join');
     localStorage.setItem(SYNC_KEY_STORAGE, apiKey);
     localStorage.setItem(SYNC_BIN_STORAGE, binId);
@@ -6019,6 +6025,25 @@ function migrateMenuFormat(menuObj) {
     if (val && !Array.isArray(val)) menuObj[iso] = [val];
   });
 }
+
+// One-time copy of a backup already restored into this Plus icon.
+// Reads the old names, writes only the Plus names, and leaves the
+// original Kitchen Ledger's saved data untouched. Sync codes are not
+// copied, so Plus cannot push into the live family share by accident.
+function copyLegacyKeyOnce(legacyKey, plusKey) {
+  try {
+    if (localStorage.getItem(plusKey) != null) return;
+    const legacy = localStorage.getItem(legacyKey);
+    if (legacy != null) localStorage.setItem(plusKey, legacy);
+  } catch (e) { /* ignore */ }
+}
+copyLegacyKeyOnce('weeknight-rotation-v1', STORAGE_KEY);
+copyLegacyKeyOnce('weeknight-menu-v1', MENU_KEY);
+copyLegacyKeyOnce('weeknight-cookbooks-v1', COOKBOOKS_KEY);
+copyLegacyKeyOnce('weeknight-shopping-v1', SHOPPING_KEY);
+copyLegacyKeyOnce('weeknight-category-overrides-v1', CATEGORY_OVERRIDES_KEY);
+copyLegacyKeyOnce('weeknight-theme-v1', THEME_KEY);
+copyLegacyKeyOnce('weeknight-last-view-v1', LAST_VIEW_KEY);
 
 sections = loadData();
 migrateSaladsSection(sections);
