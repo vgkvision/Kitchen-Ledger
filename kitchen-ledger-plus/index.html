@@ -753,6 +753,11 @@
     font-family: 'Inter', sans-serif; font-size: 0.32em; font-weight: 600; letter-spacing: 0.12em;
     vertical-align: middle; color: var(--bg); background: var(--accent);
   }
+  .beta-mark {
+    display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 999px;
+    font-family: 'Inter', sans-serif; font-size: 0.28em; font-weight: 600; letter-spacing: 0.14em;
+    vertical-align: middle; color: var(--accent); border: 1px solid var(--accent); background: transparent;
+  }
   html[data-theme="dark"] .plus-mark { color: var(--ink); }
 
   .sticky-controls {
@@ -780,11 +785,13 @@
   body.view-shopping .hero,
   body.view-menu .hero,
   body.view-suggestions .hero,
-  body.view-insights .hero { padding: 20px 0 4px; }
+  body.view-insights .hero,
+  body.view-try .hero { padding: 20px 0 4px; }
   body.view-shopping .toolbar,
   body.view-menu .toolbar,
   body.view-suggestions .toolbar,
-  body.view-insights .toolbar { display: none; }
+  body.view-insights .toolbar,
+  body.view-try .toolbar { display: none; }
   .legend { padding: 0 8px; }
   body.shopping-view-active .legend { display: none; }
   body.shopping-view-active .hero { display: block; }
@@ -832,6 +839,55 @@
   @media (prefers-reduced-motion: reduce) {
     .view.active, .picker-overlay .picker-modal, .dish-details { animation: none; transition: none; }
   }
+
+  .member-banner {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
+    margin: 14px auto 0; max-width: 640px; padding: 10px 14px;
+    background: var(--tint); border: 1px solid var(--hairline); border-left: 3px solid var(--accent); border-radius: 8px;
+  }
+  .member-banner label { font-size: 0.82em; color: var(--ink-dim); }
+  .member-banner input {
+    font-family: 'Inter', sans-serif; font-size: 0.9em; padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--hairline-strong); background: var(--surface); color: var(--ink); min-width: 140px;
+  }
+  .byline { display: block; font-size: 0.72em; color: var(--ink-dim); font-style: italic; font-weight: 400; letter-spacing: 0; }
+  .try-form, .try-list { max-width: 640px; margin: 0 auto; }
+  .try-form { display: flex; flex-direction: column; gap: 8px; margin-bottom: 22px; }
+  .try-card {
+    background: var(--surface); border: 1px solid var(--hairline); border-left: 3px solid var(--accent);
+    border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; text-align: left;
+  }
+  .try-card h3 { font-family: 'Fraunces', sans-serif; font-weight: 500; margin: 0 0 4px; font-size: 1.15em; }
+  .try-card a { color: var(--accent); font-size: 0.82em; word-break: break-all; }
+  .try-card p { margin: 6px 0 0; color: var(--ink); font-size: 0.9em; }
+  .try-card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .try-card-actions .control-select { max-width: 220px; }
+  .repeat-panel {
+    max-width: 720px; margin: 0 auto 18px; text-align: left; background: var(--tint);
+    border: 1px solid var(--hairline); border-radius: 8px; padding: 14px 14px 8px;
+  }
+  .repeat-panel-title { font-size: 0.78em; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 10px; }
+  .repeat-week-btn {
+    display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left;
+    background: var(--surface); border: 1px solid var(--hairline); border-radius: 6px;
+    padding: 10px 12px; margin-bottom: 6px; font-family: 'Inter', sans-serif; color: var(--ink); cursor: pointer;
+  }
+  .repeat-week-btn:hover { border-color: var(--accent); }
+  .repeat-week-meta { color: var(--ink-dim); font-size: 0.82em; white-space: nowrap; }
+  body.store-mode .shopping-pull,
+  body.store-mode .shopping-cat-select,
+  body.store-mode .shopping-item-row.checked { display: none !important; }
+  body.store-mode .shopping-item-text { font-size: 1.25em; line-height: 1.35; }
+  body.store-mode .shopping-item-row { padding: 16px 18px; }
+  body.store-mode .shopping-item-row input[type="checkbox"] { width: 28px; height: 28px; }
+  body.store-mode #view-shopping .view-head p { display: none; }
+  .store-toggle-active { background: var(--ink) !important; color: var(--bg) !important; border-color: var(--ink) !important; }
+  .store-banner {
+    max-width: 640px; margin: 0 auto 16px; padding: 12px 16px; text-align: center;
+    background: var(--tint); border: 1px solid var(--hairline); border-left: 3px solid var(--accent); border-radius: 8px;
+    font-family: 'Fraunces', sans-serif; font-size: 1.05em;
+  }
+
   @media (max-width: 640px) {
     .hero { padding: 28px 0 8px; }
     .wrap { padding: 0 16px 88px; padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
@@ -843,6 +899,7 @@
     }
     .shopping-add-row { top: 64px; }
     .tab-btn { padding: 9px 14px; }
+    .member-banner { padding: 10px 12px; }
   }
 </style>
 </head>
@@ -852,8 +909,13 @@
 <div class="wrap">
   <div class="hero">
     <div class="eyebrow">A Household Standard</div>
-    <h1>Kitchen Ledger <span class="plus-mark">Plus</span></h1>
+    <h1>Kitchen Ledger <span class="plus-mark">Plus</span><span class="beta-mark">Beta</span></h1>
     <div class="hero-rule"></div>
+    <div id="memberBanner" class="member-banner">
+      <label for="memberNameInput">Your name on family changes</label>
+      <input id="memberNameInput" type="text" maxlength="24" placeholder="Your name" autocomplete="name">
+      <button type="button" class="picker-action-btn picker-secondary" id="memberNameSave">Save</button>
+    </div>
     <div class="stat-badges" id="statBadges"></div>
     <div class="search-row rotation-only">
       <label class="visually-hidden" for="searchBox">Search dishes in the rotation</label>
@@ -937,6 +999,7 @@
       <button class="tab-btn" role="tab" aria-selected="false" data-view="menu">Menu Planner</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="rotation">Rotation</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="suggestions">Suggestions</button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-view="try">Want to try</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="shopping">Shopping List</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="insights">Insights</button>
     </div>
@@ -970,7 +1033,10 @@
       <button class="menu-today-btn" id="menuTodayBtn">Today</button>
       <button class="menu-today-btn" id="menuPrintBtn"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0;" aria-hidden="true"><path d="M5.5 8V3.5h9V8"/><rect x="3" y="8" width="14" height="6.5" rx="1"/><path d="M5.5 12.5h9v4.5h-9z"/></svg> Print</button>
       <button class="menu-today-btn" id="menuNewRecipeBtn">+ Add a new recipe</button>
+      <button class="menu-today-btn" id="repeatWeekBtn">Repeat a past week</button>
+      <button class="menu-today-btn" id="favoritesWeekBtn">Fill open days with favorites</button>
     </div>
+    <div id="repeatWeekPanel"></div>
     <div id="menuGrid"></div>
   </div>
 
@@ -1011,10 +1077,27 @@
     <div id="suggestionsPane"></div>
   </div>
 
+  <div class="view" id="view-try">
+    <div class="view-head">
+      <h2>Want to try</h2>
+      <p>Ideas that are not in the rotation yet. A link and a note are enough. Move one into the rotation only when you actually want to cook it.</p>
+    </div>
+    <form class="try-form" id="tryForm">
+      <input class="search" id="tryName" placeholder="Dish name" required>
+      <input class="search" id="tryUrl" placeholder="Link (optional)" inputmode="url" autocomplete="off">
+      <input class="search" id="tryNote" placeholder="Why it might fit us">
+      <button type="submit" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff">Save to Want to try</button>
+    </form>
+    <div class="try-list" id="tryListArea"></div>
+  </div>
+
   <div class="view" id="view-shopping">
     <div class="view-head">
       <h2>Shopping List</h2>
       <p>Add items by hand, or pick specific ingredients from this week's planned dinners — nothing gets added automatically.</p>
+    </div>
+    <div style="text-align:center;margin:-18px 0 18px;">
+      <button type="button" class="picker-action-btn picker-secondary" id="storeModeBtn">Store mode</button>
     </div>
     <div class="shopping-add-row">
       <label class="visually-hidden" for="shoppingAddInput">Add a shopping list item</label>
@@ -1022,17 +1105,19 @@
       <button type="button" class="picker-action-btn picker-secondary" id="shoppingAddBtn" style="flex-shrink:0;">+ Add</button>
     </div>
     <div id="shoppingListArea"></div>
-    <div class="view-head" style="margin-top:44px;">
-      <h3 style="font-family:'Fraunces',sans-serif;font-size:1.3em;margin:0 0 6px;">Pull from your menu</h3>
-      <p style="font-size:0.85em;">Check off exactly the ingredients you need — the rest stay off your list.</p>
+    <div class="shopping-pull">
+      <div class="view-head" style="margin-top:44px;">
+        <h3 style="font-family:'Fraunces',sans-serif;font-size:1.3em;margin:0 0 6px;">Pull from your menu</h3>
+        <p style="font-size:0.85em;">Check off exactly the ingredients you need — the rest stay off your list.</p>
+      </div>
+      <div class="menu-nav" style="margin-bottom:18px; justify-content:center;">
+        <button class="menu-nav-btn" id="shoppingWeekPrevBtn" aria-label="Previous week">‹</button>
+        <span class="menu-range-label" id="shoppingWeekRangeLabel"></span>
+        <button class="menu-nav-btn" id="shoppingWeekNextBtn" aria-label="Next week">›</button>
+        <button class="menu-today-btn" id="shoppingWeekThisBtn">This week</button>
+      </div>
+      <div id="shoppingMenuPicker"></div>
     </div>
-    <div class="menu-nav" style="margin-bottom:18px; justify-content:center;">
-      <button class="menu-nav-btn" id="shoppingWeekPrevBtn" aria-label="Previous week">‹</button>
-      <span class="menu-range-label" id="shoppingWeekRangeLabel"></span>
-      <button class="menu-nav-btn" id="shoppingWeekNextBtn" aria-label="Next week">›</button>
-      <button class="menu-today-btn" id="shoppingWeekThisBtn">This week</button>
-    </div>
-    <div id="shoppingMenuPicker"></div>
   </div>
 
   <div class="view" id="view-insights">
@@ -1307,6 +1392,90 @@ let menu = {};
 let knownCookbooks = [];
 let shoppingList = [];
 let categoryOverrides = {};
+
+const PHOTOS_KEY = 'weeknight-plus-photos-v1';
+const TRY_KEY = 'weeknight-plus-try-v1';
+const MEMBER_NAME_KEY = 'weeknight-plus-member-name-v1';
+const STORE_MODE_KEY = 'weeknight-plus-store-mode-v1';
+let localPhotos = {};
+let tryList = [];
+let storeMode = false;
+try { storeMode = localStorage.getItem(STORE_MODE_KEY) === '1'; } catch (e) { /* ignore */ }
+
+function photoKey(sectionId, name) { return sectionId + '::' + name; }
+function loadLocalPhotos() {
+  try { localPhotos = JSON.parse(localStorage.getItem(PHOTOS_KEY) || '{}') || {}; }
+  catch (e) { localPhotos = {}; }
+  if (!localPhotos || typeof localPhotos !== 'object') localPhotos = {};
+}
+function saveLocalPhotos() {
+  try { localStorage.setItem(PHOTOS_KEY, JSON.stringify(localPhotos)); } catch (e) { /* ignore */ }
+}
+function harvestLocalPhotos(secs) {
+  (secs || []).forEach(sec => (sec.dishes || []).forEach(d => {
+    if (d.photo && String(d.photo).startsWith('data:')) {
+      localPhotos[photoKey(sec.id, d.name)] = { photo: d.photo, credit: d.credit || '' };
+    }
+  }));
+  saveLocalPhotos();
+}
+function attachLocalPhotos(secs) {
+  (secs || []).forEach(sec => (sec.dishes || []).forEach(d => {
+    const saved = localPhotos[photoKey(sec.id, d.name)];
+    if (saved && saved.photo && (!d.photo || String(d.photo).startsWith('data:'))) {
+      d.photo = saved.photo;
+      if (saved.credit) d.credit = saved.credit;
+    }
+  }));
+}
+function rekeyLocalPhoto(fromSec, fromName, toSec, toName) {
+  const from = photoKey(fromSec, fromName);
+  const to = photoKey(toSec, toName);
+  if (from === to || !localPhotos[from]) return;
+  localPhotos[to] = localPhotos[from];
+  delete localPhotos[from];
+  saveLocalPhotos();
+}
+function forgetLocalPhoto(sectionId, name) {
+  const key = photoKey(sectionId, name);
+  if (!localPhotos[key]) return;
+  delete localPhotos[key];
+  saveLocalPhotos();
+}
+function memberName() {
+  try { return (localStorage.getItem(MEMBER_NAME_KEY) || '').trim().slice(0, 24); }
+  catch (e) { return ''; }
+}
+function setMemberName(name) {
+  const clean = (name || '').trim().slice(0, 24);
+  try {
+    if (clean) localStorage.setItem(MEMBER_NAME_KEY, clean);
+    else localStorage.removeItem(MEMBER_NAME_KEY);
+  } catch (e) { /* ignore */ }
+  return clean;
+}
+function loadTryList() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(TRY_KEY) || '[]');
+    tryList = Array.isArray(parsed) ? parsed : [];
+  } catch (e) { tryList = []; }
+}
+function saveTryList(push) {
+  try { localStorage.setItem(TRY_KEY, JSON.stringify(tryList)); } catch (e) { /* ignore */ }
+  if (push !== false) schedulePush();
+}
+function safeHttpUrl(url) {
+  try {
+    const u = new URL(String(url || '').trim());
+    if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+  } catch (e) { /* ignore */ }
+  return '';
+}
+function updateTryTabLabel() {
+  document.querySelectorAll('.tab-btn[data-view="try"]').forEach(btn => {
+    btn.textContent = tryList.length ? `Want to try (${tryList.length})` : 'Want to try';
+  });
+}
 let sortBy = 'default';
 let filterBy = 'all';
 let filterCuisine = 'all';
@@ -1504,6 +1673,8 @@ function saveData() {
   indicator.textContent = 'Saving…';
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
+    harvestLocalPhotos(sections);
+    saveLocalPhotos();
     indicator.textContent = '✓ Saved to this browser';
     setTimeout(() => { if (indicator.textContent === '✓ Saved to this browser') indicator.textContent = ''; }, 1600);
   } catch (e) {
@@ -1643,7 +1814,9 @@ function render() {
   document.getElementById('statBadges').innerHTML =
     `<span class="stat-badge">${totalDishes} Dishes</span>` +
     `<span class="stat-badge">${withRecipes} Recipe${withRecipes === 1 ? '' : 's'}</span>` +
-    `<span class="stat-badge">${tonightCount ? tonightCount + ' planned tonight' : 'Tonight still open'}</span>`;
+    `<span class="stat-badge">${tonightCount ? tonightCount + ' planned tonight' : 'Tonight still open'}</span>` +
+    (tryList.length ? `<span class="stat-badge">${tryList.length} to try</span>` : '');
+  updateTryTabLabel();
   document.getElementById('footerCount').textContent =
     totalDishes + ' dishes · ' + sections.length + ' sections · color-coded by protein';
 
@@ -1713,7 +1886,7 @@ function render() {
                 ${bulkSelectMode
                   ? `<input type="checkbox" class="dish-bulk-checkbox" data-section="${sec.id}" data-dish="${escapeHtml(d.name)}" ${bulkSelectedDishes.has(sec.id + '::' + d.name) ? 'checked' : ''} aria-label="Select ${escapeHtml(d.name)}">`
                   : `<span class="dish-drag-handle" title="Drag to reorder" aria-label="Drag to reorder ${escapeHtml(d.name)}">${icon('grip',{size:14,fill:'currentColor'})}</span>`}
-                <div class="dish-name">${escapeHtml(d.name)}</div>
+                <div class="dish-name">${escapeHtml(d.name)}${d.addedBy ? `<span class="byline">Added by ${escapeHtml(d.addedBy)}</span>` : ''}</div>
                 <div class="dish-actions">
                   <button class="favorite-btn ${d.favorite ? 'active' : ''}" data-action="favorite" data-section="${sec.id}" data-dish="${escapeHtml(d.name)}" title="Favorite" aria-label="${d.favorite ? 'Remove from' : 'Add to'} favorites">${d.favorite ? '♥' : '♡'}</button>
                   <button class="rename-btn" data-action="rename" data-section="${sec.id}" data-dish="${escapeHtml(d.name)}" title="Rename" aria-label="Rename ${escapeHtml(d.name)}">${icon('edit')}</button>
@@ -1789,6 +1962,7 @@ function refreshActiveView() {
   else if (activeView === 'suggestions') renderSuggestions();
   else if (activeView === 'shopping') renderShoppingView();
   else if (activeView === 'insights') renderInsightsView();
+  else if (activeView === 'try') renderTryView();
 }
 
 function bindBrokenImages(root) {
@@ -2109,6 +2283,7 @@ function attachHandlers() {
       if (!found) return;
       delete found.dish.photo;
       delete found.dish.credit;
+      forgetLocalPhoto(found.sec.id, found.dish.name);
       saveData();
       render();
       showToast('Photo removed');
@@ -2177,6 +2352,7 @@ function removeDish(sectionId, dishName) {
   const index = sec.dishes.findIndex(d => d.name === dishName);
   if (index === -1) return;
   const [removedDish] = sec.dishes.splice(index, 1);
+  forgetLocalPhoto(sectionId, dishName);
   // Clear out any Menu Planner entries pointing at the dish we just removed,
   // capturing them so an undo can put them right back where they were.
   const removedMenuEntries = [];
@@ -2214,6 +2390,8 @@ function addDish(sectionId, name, source) {
   }
   const newDish = { name };
   if (source) newDish.source = source;
+  const who = memberName();
+  if (who) newDish.addedBy = who;
   sec.dishes.push(newDish);
   saveData();
   render();
@@ -2908,6 +3086,7 @@ function saveRename() {
   }
   const oldName = dish.name;
   dish.name = newName;
+  rekeyLocalPhoto(sec.id, oldName, sec.id, newName);
   // Keep any planned menu items pointing at this dish in sync with the new name.
   Object.keys(menu).forEach(iso => {
     (menu[iso] || []).forEach(item => {
@@ -2965,6 +3144,7 @@ function saveMoveCategory() {
   }
   oldSec.dishes = oldSec.dishes.filter(d => d !== dish);
   newSec.dishes.push(dish);
+  rekeyLocalPhoto(oldSec.id, dish.name, newSec.id, dish.name);
   // Keep any planned menu items pointing at this dish in sync with its new category.
   const dishName = dish.name;
   Object.keys(menu).forEach(iso => {
@@ -3328,7 +3508,7 @@ function snapshotLocalState() {
     localStorage.setItem(UNDO_SYNC_KEY, JSON.stringify({
       kind: 'kitchen-ledger-undo-sync',
       savedAt: new Date().toISOString(),
-      sections, menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides,
+      sections, menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList,
     }));
   } catch (e) { /* quota — skip snapshot rather than blocking the pull */ }
 }
@@ -3469,7 +3649,22 @@ function groupForCategory(catId) {
   return 'groupC';
 }
 function sectionsInGroup(groupId) {
-  return sections.filter(s => groupForCategory(s.id) === groupId);
+  return sections.filter(s => groupForCategory(s.id) === groupId).map(sec => ({
+    ...sec,
+    dishes: (sec.dishes || []).map(dishForCloud)
+  }));
+}
+
+function dishForCloud(d) {
+  if (!d || !d.photo || !String(d.photo).startsWith('data:')) return d;
+  const copy = Object.assign({}, d);
+  delete copy.photo;
+  delete copy.credit;
+  return copy;
+}
+
+function cloudMeta() {
+  return { menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList };
 }
 
 async function syncPush() {
@@ -3501,7 +3696,7 @@ async function syncPush() {
       await sleep(120); // small pacing between requests — avoids tripping a rate limit
     }
 
-    const metaPayload = { menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides };
+    const metaPayload = cloudMeta();
     const metaKB = payloadSizeKB(metaPayload);
     if (metaKB != null && metaKB > JSONBIN_SIZE_LIMIT_KB) {
       lastSyncPushError = `Sync failed — your menu and shopping list together are ${metaKB} KB, over the ${JSONBIN_SIZE_LIMIT_KB} KB free-tier limit per item.`;
@@ -3536,11 +3731,16 @@ let lastSyncPullError = null;
 // between them the way it once did between "Sync now" and "Join".
 function applyExternalData(data, opts = {}) {
   if (!opts.skipSnapshot) snapshotLocalState();
+  harvestLocalPhotos(sections);
   sections = data.sections || [];
   menu = data.menu || {};
   knownCookbooks = data.cookbooks || [];
   shoppingList = data.shoppingList || [];
   categoryOverrides = data.categoryOverrides || {};
+  if (Array.isArray(data.tryList)) {
+    tryList = data.tryList;
+    try { localStorage.setItem(TRY_KEY, JSON.stringify(tryList)); } catch (e) { /* ignore */ }
+  }
   migrateSaladsSection(sections);
   migratePancettaEndiveSalad(sections);
   migratePoultryTitle(sections);
@@ -3558,6 +3758,8 @@ function applyExternalData(data, opts = {}) {
   syncKnownCookbooksFromDishes();
   migrateItemCategoriesToGlobal();
   syncLastMadeFromMenu();
+  harvestLocalPhotos(sections);
+  attachLocalPhotos(sections);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
   localStorage.setItem(MENU_KEY, JSON.stringify(menu));
   localStorage.setItem(COOKBOOKS_KEY, JSON.stringify(knownCookbooks));
@@ -3600,6 +3802,7 @@ async function syncPull() {
         cookbooks: (meta && meta.cookbooks) || [],
         shoppingList: (meta && meta.shoppingList) || [],
         categoryOverrides: (meta && meta.categoryOverrides) || {},
+        ...(meta && Array.isArray(meta.tryList) ? { tryList: meta.tryList } : {}),
       };
     }
 
@@ -3621,6 +3824,7 @@ async function syncPull() {
       cookbooks: (meta && meta.cookbooks) || [],
       shoppingList: (meta && meta.shoppingList) || [],
       categoryOverrides: (meta && meta.categoryOverrides) || {},
+      ...(meta && Array.isArray(meta.tryList) ? { tryList: meta.tryList } : {}),
     };
   } catch (e) {
     lastSyncPullError = describeSyncFailure(e && e.status, null);
@@ -3643,7 +3847,7 @@ async function syncCreateBin(apiKey) {
       groupBins[groupId] = await jsonbinCreate(apiKey, sectionsInGroup(groupId));
       await sleep(120);
     }
-    const metaPayload = { menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides };
+    const metaPayload = cloudMeta();
     const metaBinId = await jsonbinCreate(apiKey, metaPayload);
     const manifestBinId = await jsonbinCreate(apiKey, { groupBins, metaBinId });
     return manifestBinId;
@@ -3824,7 +4028,7 @@ function wireSyncModal() {
 // ---------------------------------------------------------------
 function switchView(view) {
   activeView = view;
-  ['recipes','menu','rotation','suggestions','shopping','insights'].forEach(v => {
+  ['recipes','menu','rotation','suggestions','shopping','insights','try'].forEach(v => {
     document.body.classList.toggle('view-' + v, v === view);
   });
   document.querySelectorAll('.tab-btn').forEach(b => {
@@ -3834,6 +4038,7 @@ function switchView(view) {
   });
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
   document.body.classList.toggle('shopping-view-active', view === 'shopping');
+  document.body.classList.toggle('store-mode', view === 'shopping' && storeMode);
   if (view === 'shopping') {
     const sticky = document.getElementById('stickyControls');
     window.scrollTo(0, sticky ? sticky.offsetTop : 0);
@@ -3936,6 +4141,227 @@ function dayItems(iso) {
   return menu[iso] || [];
 }
 
+function renderTryView() {
+  const area = document.getElementById('tryListArea');
+  if (!area) return;
+  updateTryTabLabel();
+  if (!tryList.length) {
+    area.innerHTML = `<div class="empty-state">Nothing waiting yet. Save a name, a link, and a one-line reason. The full recipe stays on the website until you decide to cook it.</div>`;
+    return;
+  }
+  const options = sections.map(s => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('');
+  area.innerHTML = tryList.map(item => {
+    const href = safeHttpUrl(item.url);
+    return `
+      <article class="try-card">
+        <h3>${escapeHtml(item.name)}</h3>
+        ${href ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${escapeHtml(href)}</a>` : ''}
+        ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
+        ${item.addedBy ? `<span class="byline">Added by ${escapeHtml(item.addedBy)}</span>` : ''}
+        <div class="try-card-actions">
+          <label class="visually-hidden" for="tryCat-${item.id}">Category</label>
+          <select class="control-select" id="tryCat-${item.id}" data-try-cat="${item.id}">${options}</select>
+          <button type="button" class="picker-action-btn picker-secondary" data-promote="${item.id}">Add to rotation</button>
+          <button type="button" class="picker-action-btn picker-secondary" data-remove-try="${item.id}">Remove</button>
+        </div>
+      </article>`;
+  }).join('');
+  area.querySelectorAll('[data-promote]').forEach(btn => {
+    btn.addEventListener('click', () => promoteTryItem(btn.dataset.promote));
+  });
+  area.querySelectorAll('[data-remove-try]').forEach(btn => {
+    btn.addEventListener('click', () => removeTryItem(btn.dataset.removeTry));
+  });
+}
+
+function addTryItem(name, url, note) {
+  const cleanName = (name || '').trim();
+  if (!cleanName) return;
+  if (tryList.some(t => t.name.toLowerCase() === cleanName.toLowerCase())) {
+    showToast('Already on Want to try');
+    return;
+  }
+  const who = memberName();
+  const item = {
+    id: 'try_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+    name: cleanName,
+    url: safeHttpUrl(url),
+    note: (note || '').trim(),
+    addedAt: new Date().toISOString(),
+  };
+  if (who) item.addedBy = who;
+  tryList.unshift(item);
+  saveTryList();
+  renderTryView();
+  showToast('Saved to Want to try');
+}
+
+function removeTryItem(id) {
+  const item = tryList.find(t => t.id === id);
+  if (!item) return;
+  tryList = tryList.filter(t => t.id !== id);
+  saveTryList();
+  renderTryView();
+  showUndoToast('Removed', () => {
+    tryList.unshift(item);
+    saveTryList();
+    renderTryView();
+    showToast('Restored');
+  });
+}
+
+function promoteTryItem(id) {
+  const item = tryList.find(t => t.id === id);
+  if (!item) return;
+  const select = document.querySelector(`[data-try-cat="${id}"]`);
+  const sectionId = select ? select.value : (sections[0] && sections[0].id);
+  const sec = sections.find(s => s.id === sectionId);
+  if (!sec) return;
+  if (sec.dishes.some(d => d.name.toLowerCase() === item.name.toLowerCase())) {
+    showToast('Already in that category');
+    return;
+  }
+  addDish(sectionId, item.name, item.url || '');
+  const dish = sec.dishes.find(d => d.name.toLowerCase() === item.name.toLowerCase());
+  if (dish) {
+    if (item.note) dish.notes = item.note;
+    if (item.addedBy) dish.addedBy = item.addedBy;
+    saveData();
+  }
+  tryList = tryList.filter(t => t.id !== id);
+  saveTryList();
+  renderTryView();
+}
+
+function pastWeeksWithDinners() {
+  const currentStart = isoOf(startOfWeek(menuAnchor));
+  const weekMap = new Map();
+  Object.keys(menu).forEach(iso => {
+    if (!dayItems(iso).length) return;
+    const start = startOfWeek(new Date(iso + 'T12:00:00'));
+    const key = isoOf(start);
+    if (key === currentStart) return;
+    if (!weekMap.has(key)) weekMap.set(key, { start, count: 0, names: [] });
+    const entry = weekMap.get(key);
+    dayItems(iso).forEach(it => {
+      entry.count += 1;
+      if (entry.names.length < 3) entry.names.push(menuItemLabel(it));
+    });
+  });
+  return Array.from(weekMap.entries()).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 8);
+}
+
+function showWeekOnPlanner() {
+  if (menuMode === 'week') return;
+  menuMode = 'week';
+  const weekBtn = document.getElementById('modeWeekBtn');
+  const monthBtn = document.getElementById('modeMonthBtn');
+  if (weekBtn) weekBtn.classList.add('active');
+  if (monthBtn) monthBtn.classList.remove('active');
+}
+
+function toggleRepeatWeekPanel() {
+  const panel = document.getElementById('repeatWeekPanel');
+  if (!panel) return;
+  if (panel.dataset.open === '1') {
+    panel.innerHTML = '';
+    panel.dataset.open = '';
+    return;
+  }
+  const weeks = pastWeeksWithDinners();
+  if (!weeks.length) {
+    panel.dataset.open = '1';
+    panel.innerHTML = `<p class="repeat-panel-title">Repeat a past week</p><p class="empty-state" style="padding:12px 0;">No earlier week has dinners yet. Plan one week first, then you can copy it.</p>`;
+    return;
+  }
+  panel.dataset.open = '1';
+  panel.innerHTML = `<p class="repeat-panel-title">Copy onto the week you're looking at</p>` + weeks.map(([key, info]) => {
+    const end = addDays(info.start, 6);
+    const label = `${info.start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const names = info.names.filter(Boolean).join(', ');
+    return `<button type="button" class="repeat-week-btn" data-repeat-week="${key}"><span>${escapeHtml(label)}${names ? `<span class="byline">${escapeHtml(names)}</span>` : ''}</span><span class="repeat-week-meta">${info.count} dinner${info.count === 1 ? '' : 's'}</span></button>`;
+  }).join('');
+  panel.querySelectorAll('[data-repeat-week]').forEach(btn => {
+    btn.addEventListener('click', () => copyWeekOntoAnchor(btn.dataset.repeatWeek));
+  });
+}
+
+function copyWeekOntoAnchor(sourceStartIso) {
+  const sourceStart = new Date(sourceStartIso + 'T12:00:00');
+  const sourceDates = getWeekDates(sourceStart);
+  const targetDates = getWeekDates(menuAnchor);
+  const apply = () => {
+    const who = memberName();
+    sourceDates.forEach((sd, i) => {
+      const items = dayItems(isoOf(sd)).map(it => {
+        const copy = Object.assign({}, it);
+        if (who) copy.plannedBy = who;
+        return copy;
+      });
+      const targetIso = isoOf(targetDates[i]);
+      if (items.length) menu[targetIso] = items;
+      else delete menu[targetIso];
+    });
+    const panel = document.getElementById('repeatWeekPanel');
+    if (panel) { panel.innerHTML = ''; panel.dataset.open = ''; }
+    showWeekOnPlanner();
+    saveMenu();
+    showToast('Week copied');
+  };
+  const targetHas = targetDates.some(d => dayItems(isoOf(d)).length);
+  if (targetHas) {
+    showConfirmModal(
+      'This week already has dinners. Replace them with the past week?',
+      apply,
+      { title: 'Repeat a past week', confirmLabel: 'Replace this week', dangerous: true }
+    );
+  } else apply();
+}
+
+function fillWeekWithFavorites() {
+  const dates = getWeekDates(menuAnchor);
+  const used = new Set();
+  dates.forEach(d => dayItems(isoOf(d)).forEach(it => {
+    if (it.sectionId && it.dishName) used.add(it.sectionId + '::' + it.dishName);
+  }));
+  const pool = [];
+  sections.forEach(sec => (sec.dishes || []).forEach(d => {
+    if (!(d.favorite || d.jeffLikes)) return;
+    const key = sec.id + '::' + d.name;
+    if (used.has(key)) return;
+    pool.push({ sec, dish: d });
+  }));
+  pool.sort((a, b) => (a.dish.lastMade || '0000-00-00').localeCompare(b.dish.lastMade || '0000-00-00'));
+  const open = dates.filter(d => !dayItems(isoOf(d)).length);
+  if (!open.length) { showToast('This week has no open days'); return; }
+  if (!pool.length) { showToast('No favorites left to place. Heart a dish, or mark Jeff likes it.'); return; }
+  const who = memberName();
+  let placed = 0;
+  open.forEach(d => {
+    const next = pool.shift();
+    if (!next) return;
+    const item = { sectionId: next.sec.id, dishName: next.dish.name };
+    if (who) item.plannedBy = who;
+    menu[isoOf(d)] = [item];
+    placed++;
+  });
+  showWeekOnPlanner();
+  saveMenu();
+  showToast(placed === 1 ? 'Filled 1 open day' : `Filled ${placed} open days`);
+}
+
+function setStoreMode(on) {
+  storeMode = !!on;
+  try { localStorage.setItem(STORE_MODE_KEY, storeMode ? '1' : '0'); } catch (e) { /* ignore */ }
+  document.body.classList.toggle('store-mode', activeView === 'shopping' && storeMode);
+  const btn = document.getElementById('storeModeBtn');
+  if (btn) {
+    btn.classList.toggle('store-toggle-active', storeMode);
+    btn.textContent = storeMode ? 'Leave store mode' : 'Store mode';
+    btn.setAttribute('aria-pressed', storeMode ? 'true' : 'false');
+  }
+}
+
 // ---------------------------------------------------------------
 // Menu planner — week / month views + day editor
 // ---------------------------------------------------------------
@@ -3959,8 +4385,8 @@ function renderMenuView() {
           <div class="day-card-date">${d.getDate()}</div>
           ${items.length
             ? `<div class="day-card-items">${items.map(it => it.custom
-                ? `<div class="day-card-dish">${escapeHtml(menuItemLabel(it))}</div>`
-                : `<div class="day-card-dish menu-item-link" data-section="${it.sectionId}" data-dish="${escapeHtml(it.dishName)}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(menuItemLabel(it))}</div>`
+                ? `<div class="day-card-dish">${escapeHtml(menuItemLabel(it))}${it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : ''}</div>`
+                : `<div class="day-card-dish menu-item-link" data-section="${it.sectionId}" data-dish="${escapeHtml(it.dishName)}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(menuItemLabel(it))}${it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : ''}</div>`
               ).join('')}</div>`
             : `<div class="day-card-empty">+ Plan dinner</div>`}
         </div>`;
@@ -4178,7 +4604,10 @@ function renderDayEditor() {
     const val = input.value.trim();
     if (!val) { showToast('Type something first'); return; }
     const list = dayItems(dayEditorIso);
-    list.push({ custom: val });
+    const customItem = { custom: val };
+    const who = memberName();
+    if (who) customItem.plannedBy = who;
+    list.push(customItem);
     menu[dayEditorIso] = list;
     saveMenu();
     renderDayEditor();
@@ -4213,7 +4642,10 @@ function renderDayEditorDishResults() {
   resultsEl.querySelectorAll('.day-editor-dish-result').forEach(btn => {
     btn.addEventListener('click', () => {
       const list = dayItems(dayEditorIso);
-      list.push({ sectionId: btn.dataset.section, dishName: btn.dataset.dish });
+      const planned = { sectionId: btn.dataset.section, dishName: btn.dataset.dish };
+      const who = memberName();
+      if (who) planned.plannedBy = who;
+      list.push(planned);
       menu[dayEditorIso] = list;
       saveMenu();
       dayEditorDishSearch = '';
@@ -5080,7 +5512,10 @@ function classifyShoppingItem(text) {
 function addShoppingItem(rawText) {
   const text = rawText.trim();
   if (!text) return;
-  shoppingList.push({ id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, checked: false });
+  const item = { id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, checked: false };
+  const who = memberName();
+  if (who) item.addedBy = who;
+  shoppingList.push(item);
   saveShoppingList();
 }
 
@@ -5187,7 +5622,10 @@ function addIngredientsToShoppingList(texts) {
     }
     const existingExact = shoppingList.find(i => i.text.toLowerCase().trim() === text.toLowerCase().trim());
     if (existingExact) return;
-    shoppingList.push({ id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, checked: false });
+    const pulled = { id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7), text, checked: false };
+    const who = memberName();
+    if (who) pulled.addedBy = who;
+    shoppingList.push(pulled);
     addedCount++;
   });
 
@@ -5218,7 +5656,7 @@ function downloadBackup() {
   const payload = {
     kind: 'kitchen-ledger-backup',
     exportedAt: new Date().toISOString(),
-    sections, menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides,
+    sections, menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
@@ -5437,7 +5875,7 @@ function openHelpModal() {
     <div class="picker-eyebrow">Help & feature guide</div>
     <div class="help-body">
       <div class="help-section-title">Getting around</div>
-      <p><strong>Recipes</strong> is your recipe book — full ingredients and steps. <strong>Rotation</strong> is the full list of every dish, recipe or not, organized by category. <strong>Menu Planner</strong> lays out your week or month. <strong>Suggestions</strong> helps you decide what to cook based on what's on hand, in season, or overdue. <strong>Shopping List</strong> builds your grocery list. <strong>Insights</strong> shows stats on your rotation — by category, cuisine, cookbook, and what hasn't been made in a while.</p>
+      <p><strong>Recipes</strong> is your recipe book — full ingredients and steps. <strong>Rotation</strong> is the full list of every dish, recipe or not, organized by category. <strong>Menu Planner</strong> lays out your week or month. <strong>Suggestions</strong> helps you decide what to cook based on what's on hand, in season, or overdue. <strong>Want to try</strong> is a shelf for ideas that are not in the rotation yet. <strong>Shopping List</strong> builds your grocery list. <strong>Insights</strong> shows stats on your rotation — by category, cuisine, cookbook, and what hasn't been made in a while.</p>
 
       <div class="help-section-title">Cooking Mode</div>
       <p>Open any full recipe and tap "Start cooking" for a large-text, one-step-at-a-time view — easier to read from across the kitchen than the recipe card. Add up to two more dishes to cook alongside it (a main and a side, say) and switch between them with the pills at the top; each keeps its own place and its own timer, running independently even while you're looking at the other recipe. Any step mentioning a duration gets a tap-to-start timer that keeps ringing until you dismiss it, and the screen stays awake the whole time so it won't lock mid-recipe.</p>
@@ -5458,7 +5896,7 @@ function openHelpModal() {
       <p>In Rotation, tap "Select multiple" to check off several dishes at once and move them to a different category, add a dietary tag, or delete them all together — quicker than editing one dish at a time for cleanup.</p>
 
       <div class="help-section-title">Shopping list</div>
-      <p>Add items by hand, or check off specific ingredients from this week's planned dinners — nothing gets added automatically. Checking the same ingredient from two dishes combines the quantities. Items sort into Produce, Meat & Seafood, Dairy, Bakery, Frozen, Pantry, and Household & Personal Care; if one lands in the wrong spot, change it once and it's remembered for next time.</p>
+      <p>Add items by hand, or check off specific ingredients from this week's planned dinners — nothing gets added automatically. Checking the same ingredient from two dishes combines the quantities. Items sort into Produce, Meat & Seafood, Dairy, Bakery, Frozen, Pantry, and Household & Personal Care; if one lands in the wrong spot, change it once and it's remembered for next time. <strong>Store mode</strong> makes the type larger, hides items you've already checked, and tucks away the menu picker so the list is easier to read in the aisle.</p>
 
       <div class="help-section-title">Insights</div>
       <p>A read-only summary of your rotation — dishes by category, cuisine, and cookbook, dietary tags in use, and what hasn't been made in 60+ days or ever. Everything here is clickable and jumps you straight to that dish or filtered view.</p>
@@ -5467,10 +5905,12 @@ function openHelpModal() {
       <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page. Look for the print/download/share icons in each section.</p>
 
       <div class="help-section-title">Family sharing</div>
-      <p>"Share with family" syncs your recipes, menu, cookbooks, and shopping list to everyone connected — so if someone adds milk to the list while you're out, it's there when you check.</p>
+      <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
-      <div class="help-section-title">What's new in Plus</div>
-      <p>Same family data and the same workflows — with a quieter header so Menu and Shopping aren't buried under Rotation filters, a Tonight card on the Menu Planner, “Add all to list” on Shopping, dish actions that stay visible on phones, and an undo for the last sync on this device if a pull replaced something it shouldn't have. Cooking Mode no longer closes if you tap the dimmed background or press Escape, so a running timer isn't lost by accident.</p>
+      <div class="help-section-title">What's new in this beta</div>
+      <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
+      <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
+      <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
 
       <div class="help-section-title">Appearance</div>
       <p>Tap the moon icon near Help to switch between light and dark mode — your choice is remembered on that device.</p>
@@ -5619,19 +6059,23 @@ function renderShoppingView() {
   if (!listArea || !pickerArea) return;
 
   // The list itself, grouped by category
+  const storeBanner = storeMode ? `<div class="store-banner">Store mode — large type, checked items hidden</div>` : '';
+  const visibleList = storeMode ? shoppingList.filter(i => !i.checked) : shoppingList;
   if (!shoppingList.length) {
-    listArea.innerHTML = `<div class="empty-state">Your list is empty — add an item above, or pull ingredients from this week's menu below.</div>`;
+    listArea.innerHTML = `${storeBanner}<div class="empty-state">Your list is empty — add an item above, or pull ingredients from this week's menu below.</div>`;
+  } else if (!visibleList.length) {
+    listArea.innerHTML = `${storeBanner}<div class="empty-state">Everything is checked. Leave store mode to review those items.</div>`;
   } else {
-    let html = '';
+    let html = storeBanner;
     SHOPPING_CATEGORIES.forEach(cat => {
-      const items = shoppingList.filter(i => classifyShoppingItem(i.text) === cat)
+      const items = shoppingList.filter(i => classifyShoppingItem(i.text) === cat && (!storeMode || !i.checked))
         .sort((a, b) => (a.checked === b.checked) ? 0 : (a.checked ? 1 : -1));
       if (!items.length) return;
       html += `<div class="season-group-label">${escapeHtml(cat)}</div>
         <div class="shopping-list">${items.map(item => `
           <div class="shopping-item-row ${item.checked ? 'checked' : ''}">
             <input type="checkbox" data-id="${item.id}" ${item.checked ? 'checked' : ''}>
-            <span class="shopping-item-text">${escapeHtml(item.text)}</span>
+            <span class="shopping-item-text">${escapeHtml(item.text)}${item.addedBy ? `<span class="byline">${escapeHtml(item.addedBy)} added this</span>` : ''}</span>
             <select class="shopping-cat-select" data-id="${item.id}" title="Change category">
               ${SHOPPING_CATEGORIES.map(c => `<option value="${c}" ${cat === c ? 'selected' : ''}>${c}</option>`).join('')}
             </select>
@@ -6060,6 +6504,11 @@ reorderSections(sections);
 migrateSectionColors(sections);
 migrateWineDefaults(sections);
 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sections)); } catch (e) { /* ignore */ }
+loadLocalPhotos();
+loadTryList();
+harvestLocalPhotos(sections);
+attachLocalPhotos(sections);
+try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sections)); } catch (e) { /* ignore */ }
 
 const ALL_OVERLAY_IDS = ['pickerOverlay', 'syncOverlay', 'dayEditorOverlay', 'recipeOverlay', 'renameOverlay', 'moveCategoryOverlay', 'manageCookbooksOverlay', 'printMenuOverlay', 'shoppingPrintOverlay', 'newRecipeOverlay', 'pasteRecipeOverlay', 'recipePrintOverlay', 'confirmOverlay', 'helpOverlay', 'bulkActionOverlay', 'cookingModeOverlay', 'cookbookPrintOverlay', 'cookingSelectOverlay'];
 ALL_OVERLAY_IDS.forEach(id => {
@@ -6211,7 +6660,7 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 (() => {
   let savedView = null;
   try { savedView = localStorage.getItem(LAST_VIEW_KEY); } catch (e) { /* ignore */ }
-  const validViews = ['recipes', 'menu', 'rotation', 'suggestions', 'shopping', 'insights'];
+  const validViews = ['recipes', 'menu', 'rotation', 'suggestions', 'try', 'shopping', 'insights'];
   if (savedView && validViews.includes(savedView) && savedView !== 'recipes') {
     setTimeout(() => switchView(savedView), 0);
   }
@@ -6246,6 +6695,29 @@ document.getElementById('menuTodayBtn').addEventListener('click', () => {
   renderMenuView();
 });
 document.getElementById('menuPrintBtn').addEventListener('click', printMenu);
+document.getElementById('repeatWeekBtn').addEventListener('click', toggleRepeatWeekPanel);
+document.getElementById('favoritesWeekBtn').addEventListener('click', fillWeekWithFavorites);
+document.getElementById('storeModeBtn').addEventListener('click', () => {
+  setStoreMode(!storeMode);
+  renderShoppingView();
+});
+setStoreMode(storeMode);
+const memberNameInput = document.getElementById('memberNameInput');
+if (memberNameInput) memberNameInput.value = memberName();
+document.getElementById('memberNameSave').addEventListener('click', () => {
+  const saved = setMemberName(memberNameInput.value);
+  memberNameInput.value = saved;
+  showToast(saved ? `Changes will say ${saved}` : 'Name cleared');
+});
+document.getElementById('tryForm').addEventListener('submit', e => {
+  e.preventDefault();
+  addTryItem(
+    document.getElementById('tryName').value,
+    document.getElementById('tryUrl').value,
+    document.getElementById('tryNote').value
+  );
+  e.target.reset();
+});
 
 renderMenuView();
 renderRecipesList();
