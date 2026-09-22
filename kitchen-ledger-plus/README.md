@@ -4,7 +4,7 @@ A polished clone of the live family Kitchen Ledger app. The original `index.html
 
 Open `kitchen-ledger-plus/index.html` in a browser, or use the Plus home-screen icon. Plus keeps its own saved copy, so a test dish stays in Plus.
 
-A picture guide for the beta is in [`beta-guide.html`](beta-guide.html).
+A picture guide for the beta is in [`beta-guide.html`](beta-guide.html). The same notes are in a printable deck: [`kitchen-ledger-plus-beta.pdf`](kitchen-ledger-plus-beta.pdf).
 
 ## Two home-screen icons (iPad / iPhone)
 
