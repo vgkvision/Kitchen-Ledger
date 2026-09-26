@@ -886,6 +886,9 @@
   .try-card p { margin: 6px 0 0; color: var(--ink); font-size: 0.9em; }
   .try-card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .try-card-actions .control-select { max-width: 220px; }
+  .photo-steps { margin: 0 0 8px; padding-left: 1.2em; text-align: left; }
+  .photo-steps li { margin: 0 0 10px; line-height: 1.45; }
+  .photo-steps strong { font-weight: 600; }
   .repeat-panel {
     max-width: 720px; margin: 0 auto 18px; text-align: left; background: var(--tint);
     border: 1px solid var(--hairline); border-radius: 8px; padding: 14px 14px 8px;
@@ -1084,6 +1087,7 @@
         <option value="all">Jump to cuisine…</option>
       </select>
       <button type="button" class="picker-action-btn picker-secondary" id="newRecipeBtn">+ Add a new recipe</button>
+      <button type="button" class="picker-action-btn picker-secondary" id="photoRecipeBtn">Add from a photo</button>
       <button type="button" class="picker-action-btn picker-secondary" id="pasteRecipeBtn">Paste a recipe</button>
       <button type="button" class="picker-action-btn picker-secondary" id="printCookbookBtn"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0;" aria-hidden="true"><path d="M5.5 8V3.5h9V8"/><rect x="3" y="8" width="14" height="6.5" rx="1"/><path d="M5.5 12.5h9v4.5h-9z"/></svg> Print full cookbook</button>
     </div>
@@ -3003,6 +3007,25 @@ function openNewRecipeModal() {
   nameInput.focus();
 }
 function closeNewRecipeModal() { document.getElementById('newRecipeOverlay').classList.remove('show'); }
+
+function openPhotoRecipeGuide() {
+  const modal = document.getElementById('pasteRecipeModal');
+  modal.innerHTML = `
+    <div class="picker-eyebrow">Add from a photo</div>
+    <p style="font-size:0.95em;color:var(--ink-dim);line-height:1.5;margin:0 0 14px;text-align:left;">The iPhone reads the page. Plus uses the words you copy.</p>
+    <ol class="photo-steps">
+      <li><strong>Take the photo</strong> in the Camera app. You can leave Plus for a moment.</li>
+      <li><strong>Copy the words.</strong> Open the photo, tap the Live Text icon (small lines inside a box), then select the recipe and copy it.</li>
+      <li><strong>Come back here</strong> and tap “I copied the words.” Paste on the next screen. Put the dish name on the first line. If the page has two lists, leave the words Ingredients and Instructions above them.</li>
+    </ol>
+    <div class="picker-actions">
+      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="photo-copied">I copied the words</button>
+      <button class="picker-action-btn picker-secondary" data-action="close-photo-recipe">Close</button>
+    </div>`;
+  modal.querySelector('[data-action="close-photo-recipe"]').addEventListener('click', closePasteRecipeModal);
+  modal.querySelector('[data-action="photo-copied"]').addEventListener('click', openPasteRecipeModal);
+  document.getElementById('pasteRecipeOverlay').classList.add('show');
+}
 
 function openPasteRecipeModal() {
   const modal = document.getElementById('pasteRecipeModal');
@@ -6135,7 +6158,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes walks through copying a photographed recipe with the iPhone’s Live Text, then pasting it in.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
@@ -6852,6 +6875,7 @@ document.getElementById('dietFilterSelect').addEventListener('change', e => { fi
 document.getElementById('spiceFilterSelect').addEventListener('change', e => { filterSpice = e.target.value; render(); });
 document.getElementById('manageCookbooksBtn').addEventListener('click', openManageCookbooksModal);
 document.getElementById('newRecipeBtn').addEventListener('click', openNewRecipeModal);
+document.getElementById('photoRecipeBtn').addEventListener('click', openPhotoRecipeGuide);
 document.getElementById('pasteRecipeBtn').addEventListener('click', openPasteRecipeModal);
 document.getElementById('printCookbookBtn').addEventListener('click', openCookbookPrintPreview);
 document.getElementById('menuNewRecipeBtn').addEventListener('click', openNewRecipeModal);
