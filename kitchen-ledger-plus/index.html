@@ -768,7 +768,7 @@
     display: flex; justify-content: flex-end; align-items: center; gap: 8px;
     position: static;
   }
-  .help-btn, .theme-toggle-btn, .sync-status-btn {
+  .help-btn, .theme-toggle-btn, .sync-status-btn, .easy-reading-btn {
     position: static;
   }
   .tab-nav {
@@ -796,6 +796,7 @@
   body.shopping-view-active .legend { display: none; }
   body.shopping-view-active .hero { display: block; }
   body.shopping-view-active .theme-toggle-btn,
+  body.shopping-view-active .easy-reading-btn,
   body.shopping-view-active .help-btn,
   body.shopping-view-active .sync-status-btn { display: flex; }
 
@@ -807,8 +808,31 @@
   .tonight-banner-label {
     font-size: 0.72em; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 4px;
   }
-  .tonight-banner-dishes { font-family: 'Fraunces', sans-serif; font-size: 1.15em; }
-  .tonight-banner-empty { color: var(--ink-dim); font-style: italic; font-size: 0.95em; }
+  .tonight-banner-dishes { font-family: 'Fraunces', sans-serif; font-size: 1.45em; line-height: 1.25; }
+  .tonight-banner-empty { color: var(--ink-dim); font-style: italic; font-size: 1.05em; }
+  .tonight-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tonight-actions .picker-action-btn { font-size: 1em; padding: 12px 16px; min-height: 46px; }
+  .easy-reading-btn {
+    font-family: 'Inter', sans-serif; font-weight: 700; font-size: 0.78em;
+    width: auto; min-width: 36px; padding: 0 8px; border-radius: 999px;
+  }
+  .easy-reading-btn.easy-reading-on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  body.easy-reading .day-card-dish { font-size: 1.2em; }
+  body.easy-reading .day-card-label { font-size: 0.95em; }
+  body.easy-reading .day-card-date { font-size: 1.7em; }
+  body.easy-reading .month-cell-dish { font-size: 1em; }
+  body.easy-reading .recipe-card-name { font-size: 1.28em; }
+  body.easy-reading .dish-name { font-size: 1.22em; }
+  body.easy-reading .recipe-modal h3 { font-size: 1.85em; }
+  body.easy-reading .recipe-modal ul,
+  body.easy-reading .recipe-modal ol { font-size: 1.18em; line-height: 1.65; }
+  body.easy-reading .tonight-banner-dishes { font-size: 1.75em; }
+  body.easy-reading .shopping-item-text { font-size: 1.28em; line-height: 1.35; }
+  body.easy-reading .shopping-item-row { padding: 14px 16px; }
+  body.easy-reading .shopping-item-row input[type="checkbox"] { width: 26px; height: 26px; }
+  body.easy-reading .view-head p,
+  body.easy-reading .try-card p { font-size: 1.08em; }
+  body.easy-reading .try-card h3 { font-size: 1.35em; }
 
   .day-card.is-today, .month-cell.is-today {
     box-shadow: inset 0 0 0 1px var(--ink);
@@ -894,7 +918,7 @@
     .sticky-tools { top: auto; }
     .legend { padding: 0; }
     .sticky-controls { text-align: center; }
-    .theme-toggle-btn, .help-btn, .sync-status-btn {
+    .theme-toggle-btn, .help-btn, .sync-status-btn, .easy-reading-btn {
       position: static; display: inline-flex; margin: 0;
     }
     .shopping-add-row { top: 64px; }
@@ -903,7 +927,7 @@
   }
 </style>
 </head>
-<body class="view-recipes">
+<body class="view-menu">
 
 <a class="skip-link" href="#mainContent">Skip to content</a>
 <div class="wrap">
@@ -986,6 +1010,7 @@
 
   <div class="sticky-controls" id="stickyControls">
     <div class="sticky-tools">
+      <button type="button" class="theme-toggle-btn easy-reading-btn" id="easyReadingBtn" aria-pressed="false" aria-label="Easy reading" title="Easy reading">Aa</button>
       <button type="button" class="sync-status-btn" id="syncStatusBtn" aria-label="Sync status" title="Sync status">
         <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.3 15a3.3 3.3 0 010-6.6 4.5 4.5 0 018.6-1.3A3.4 3.4 0 0114.3 15z"/></svg>
         <span class="status-dot"></span>
@@ -995,8 +1020,8 @@
     </div>
     <div class="legend" id="legend"></div>
     <div class="tab-nav" id="tabNav" role="tablist" aria-label="Kitchen Ledger sections">
-      <button class="tab-btn active" role="tab" aria-selected="true" data-view="recipes">Recipes</button>
-      <button class="tab-btn" role="tab" aria-selected="false" data-view="menu">Menu Planner</button>
+      <button class="tab-btn" role="tab" aria-selected="false" data-view="recipes">Recipes</button>
+      <button class="tab-btn active" role="tab" aria-selected="true" data-view="menu">Menu Planner</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="rotation">Rotation</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="suggestions">Suggestions</button>
       <button class="tab-btn" role="tab" aria-selected="false" data-view="try">Want to try</button>
@@ -1014,7 +1039,7 @@
     <div class="no-results" id="noResults">No dishes match your search.</div>
   </div>
 
-  <div class="view" id="view-menu">
+  <div class="view active" id="view-menu">
     <div class="view-head">
       <h2>Menu Planner</h2>
       <p>Plan dinners day by day, then step back and see the week or month at a glance.</p>
@@ -1032,6 +1057,7 @@
       </div>
       <button class="menu-today-btn" id="menuTodayBtn">Today</button>
       <button class="menu-today-btn" id="menuPrintBtn"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0;" aria-hidden="true"><path d="M5.5 8V3.5h9V8"/><rect x="3" y="8" width="14" height="6.5" rx="1"/><path d="M5.5 12.5h9v4.5h-9z"/></svg> Print</button>
+      <button class="menu-today-btn" id="menuLargePrintBtn">Fridge sheet</button>
       <button class="menu-today-btn" id="menuNewRecipeBtn">+ Add a new recipe</button>
       <button class="menu-today-btn" id="repeatWeekBtn">Repeat a past week</button>
       <button class="menu-today-btn" id="favoritesWeekBtn">Fill open days with favorites</button>
@@ -1040,7 +1066,7 @@
     <div id="menuGrid"></div>
   </div>
 
-  <div class="view active" id="view-recipes">
+  <div class="view" id="view-recipes">
     <div class="view-head">
       <h2>Recipe Book</h2>
       <p id="recipesCount">Loading…</p>
@@ -1397,10 +1423,13 @@ const PHOTOS_KEY = 'weeknight-plus-photos-v1';
 const TRY_KEY = 'weeknight-plus-try-v1';
 const MEMBER_NAME_KEY = 'weeknight-plus-member-name-v1';
 const STORE_MODE_KEY = 'weeknight-plus-store-mode-v1';
+const EASY_READING_KEY = 'weeknight-plus-easy-reading-v1';
 let localPhotos = {};
 let tryList = [];
 let storeMode = false;
+let easyReading = false;
 try { storeMode = localStorage.getItem(STORE_MODE_KEY) === '1'; } catch (e) { /* ignore */ }
+try { easyReading = localStorage.getItem(EASY_READING_KEY) === '1'; } catch (e) { /* ignore */ }
 
 function photoKey(sectionId, name) { return sectionId + '::' + name; }
 function loadLocalPhotos() {
@@ -1507,7 +1536,7 @@ const SPICE_LEVELS = ['Mild', 'Medium', 'Spicy'];
 let recipeSortMode = 'default';
 let recipeCuisinePick = 'all';
 const LAST_VIEW_KEY = 'weeknight-plus-last-view-v1';
-let activeView = 'recipes';
+let activeView = 'menu';
 let menuMode = 'week';
 let menuAnchor = new Date();
 let activeSugTab = 'useup';
@@ -2585,6 +2614,8 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && overlay && overlay.classList.contains('show')) {
     requestCookingWakeLock();
   }
+  if (document.visibilityState === 'visible') syncStoreWakeLock();
+  else releaseStoreWakeLock();
 });
 
 // --- Choosing recipes to cook together (skippable — defaults to just one) ---
@@ -4039,6 +4070,7 @@ function switchView(view) {
   document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + view));
   document.body.classList.toggle('shopping-view-active', view === 'shopping');
   document.body.classList.toggle('store-mode', view === 'shopping' && storeMode);
+  syncStoreWakeLock();
   if (view === 'shopping') {
     const sticky = document.getElementById('stickyControls');
     window.scrollTo(0, sticky ? sticky.offsetTop : 0);
@@ -4360,6 +4392,32 @@ function setStoreMode(on) {
     btn.textContent = storeMode ? 'Leave store mode' : 'Store mode';
     btn.setAttribute('aria-pressed', storeMode ? 'true' : 'false');
   }
+  syncStoreWakeLock();
+}
+
+let storeWakeLock = null;
+function releaseStoreWakeLock() {
+  if (storeWakeLock) { storeWakeLock.release().catch(() => {}); storeWakeLock = null; }
+}
+async function syncStoreWakeLock() {
+  const want = storeMode && activeView === 'shopping' && document.visibilityState !== 'hidden';
+  if (!want) { releaseStoreWakeLock(); return; }
+  if (storeWakeLock) return;
+  try {
+    if ('wakeLock' in navigator) storeWakeLock = await navigator.wakeLock.request('screen');
+  } catch (e) { /* the list still works if the phone prefers to lock */ }
+}
+
+function setEasyReading(on) {
+  easyReading = !!on;
+  try { localStorage.setItem(EASY_READING_KEY, easyReading ? '1' : '0'); } catch (e) { /* ignore */ }
+  document.body.classList.toggle('easy-reading', easyReading);
+  const btn = document.getElementById('easyReadingBtn');
+  if (btn) {
+    btn.classList.toggle('easy-reading-on', easyReading);
+    btn.setAttribute('aria-pressed', easyReading ? 'true' : 'false');
+    btn.title = easyReading ? 'Easy reading is on' : 'Easy reading';
+  }
 }
 
 // ---------------------------------------------------------------
@@ -4436,27 +4494,47 @@ function renderMenuView() {
   if (banner) {
     const tonightItems = dayItems(todayIso);
     if (tonightItems.length) {
-      const firstRecipe = tonightItems.find(it => !it.custom);
       banner.innerHTML = `
         <div>
           <div class="tonight-banner-label">Tonight</div>
           <div class="tonight-banner-dishes">${tonightItems.map(it => escapeHtml(menuItemLabel(it))).join(' · ')}</div>
         </div>
-        <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-tonight-action="${firstRecipe ? 'recipe' : 'edit'}">${firstRecipe ? 'Open recipe' : 'Edit tonight'}</button>`;
-      banner.querySelector('[data-tonight-action]').addEventListener('click', () => {
-        if (firstRecipe) openRecipeModal(firstRecipe.sectionId, firstRecipe.dishName, false);
-        else openDayEditor(todayIso);
-      });
+        <div class="tonight-actions">
+          <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-cook-tonight>Cook this</button>
+          <button type="button" class="picker-action-btn picker-secondary" data-shop-tonight>Shopping list</button>
+        </div>`;
+      banner.querySelector('[data-cook-tonight]').addEventListener('click', cookTonight);
+      banner.querySelector('[data-shop-tonight]').addEventListener('click', () => switchView('shopping'));
     } else {
       banner.innerHTML = `
         <div>
           <div class="tonight-banner-label">Tonight</div>
           <div class="tonight-banner-empty">Nothing planned yet — add dinner in one tap.</div>
         </div>
-        <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-plan-tonight>Plan tonight</button>`;
+        <div class="tonight-actions">
+          <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-plan-tonight>Plan tonight</button>
+          <button type="button" class="picker-action-btn picker-secondary" data-shop-tonight>Shopping list</button>
+        </div>`;
       banner.querySelector('[data-plan-tonight]').addEventListener('click', () => openDayEditor(todayIso));
+      banner.querySelector('[data-shop-tonight]').addEventListener('click', () => switchView('shopping'));
     }
   }
+}
+
+function cookTonight() {
+  const todayIso = isoOf(new Date());
+  const planned = dayItems(todayIso).filter(it => !it.custom);
+  const refs = planned.filter(it => {
+    const found = dishLookup(it.sectionId, it.dishName);
+    return found && dishHasCookableSteps(found.dish);
+  }).slice(0, 3).map(it => ({ sectionId: it.sectionId, dishName: it.dishName }));
+  if (refs.length) {
+    openCookingModeMulti(refs);
+    return;
+  }
+  const first = planned[0];
+  showToast(first ? 'Add the steps first, then Cook this can walk you through them' : 'Plan a dinner first');
+  if (first) openRecipeModal(first.sectionId, first.dishName, false);
 }
 
 function buildPrintMenuHtml() {
@@ -4504,6 +4582,36 @@ function printMenu() {
   document.getElementById('printMenuOverlay').classList.add('show');
 }
 function closePrintMenuModal() { document.getElementById('printMenuOverlay').classList.remove('show'); }
+
+function printLargeMenu() {
+  const dates = getWeekDates(menuAnchor);
+  const title = `${dates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – ${dates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
+  const days = dates.map(d => {
+    const items = dayItems(isoOf(d));
+    const names = items.length
+      ? items.map(it => `<div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;margin:2px 0 8px;">${escapeHtml(menuItemLabel(it))}</div>`).join('')
+      : `<div style="font-size:22px;color:#8a8076;margin:2px 0 8px;">Open</div>`;
+    return `<div style="border-bottom:1px solid #e4ddd4;padding:10px 0 4px;break-inside:avoid;">
+      <div style="font-family:Inter,sans-serif;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:#6e655c;">${d.toLocaleDateString('en-US',{weekday:'long'})}</div>
+      ${names}
+    </div>`;
+  }).join('');
+  const modal = document.getElementById('printMenuModal');
+  modal.innerHTML = `
+    <div class="picker-eyebrow">Fridge sheet</div>
+    <div id="printMenuContent" style="text-align:left;">
+      <h3 style="font-family:Georgia,'Times New Roman',serif;font-size:28px;margin:0 0 4px;">This week</h3>
+      <div style="font-size:16px;color:#6e655c;margin-bottom:8px;">${escapeHtml(title)}</div>
+      ${days}
+    </div>
+    <div class="picker-actions">
+      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="do-print-menu">${icon('print')} Print</button>
+      <button class="picker-action-btn picker-secondary" data-action="close-print-menu">Close</button>
+    </div>`;
+  modal.querySelector('[data-action="close-print-menu"]').addEventListener('click', closePrintMenuModal);
+  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', () => printElement('printMenuContent'));
+  document.getElementById('printMenuOverlay').classList.add('show');
+}
 
 function openDayEditor(iso) {
   dayEditorIso = iso;
@@ -5896,24 +6004,25 @@ function openHelpModal() {
       <p>In Rotation, tap "Select multiple" to check off several dishes at once and move them to a different category, add a dietary tag, or delete them all together — quicker than editing one dish at a time for cleanup.</p>
 
       <div class="help-section-title">Shopping list</div>
-      <p>Add items by hand, or check off specific ingredients from this week's planned dinners — nothing gets added automatically. Checking the same ingredient from two dishes combines the quantities. Items sort into Produce, Meat & Seafood, Dairy, Bakery, Frozen, Pantry, and Household & Personal Care; if one lands in the wrong spot, change it once and it's remembered for next time. <strong>Store mode</strong> makes the type larger, hides items you've already checked, and tucks away the menu picker so the list is easier to read in the aisle.</p>
+      <p>Add items by hand, or check off specific ingredients from this week's planned dinners — nothing gets added automatically. Checking the same ingredient from two dishes combines the quantities. Items sort into Produce, Meat & Seafood, Dairy, Bakery, Frozen, Pantry, and Household & Personal Care; if one lands in the wrong spot, change it once and it's remembered for next time. <strong>Store mode</strong> makes the type larger, hides items you've already checked, tucks away the menu picker, and keeps the screen awake so the phone does not lock in the aisle.</p>
 
       <div class="help-section-title">Insights</div>
       <p>A read-only summary of your rotation — dishes by category, cuisine, and cookbook, dietary tags in use, and what hasn't been made in 60+ days or ever. Everything here is clickable and jumps you straight to that dish or filtered view.</p>
 
       <div class="help-section-title">Printing & sharing</div>
-      <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page. Look for the print/download/share icons in each section.</p>
+      <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. <strong>Fridge sheet</strong> on the Menu Planner prints the week on screen in large type, one page for the refrigerator. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page.</p>
 
       <div class="help-section-title">Family sharing</div>
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
 
       <div class="help-section-title">Appearance</div>
-      <p>Tap the moon icon near Help to switch between light and dark mode — your choice is remembered on that device.</p>
+      <p>Tap the moon icon near Help to switch between light and dark mode. Tap <strong>Aa</strong> for Easy reading. Both choices are remembered on that device.</p>
     </div>
     <div class="picker-actions">
       <button class="picker-action-btn picker-secondary" data-action="close-help">Close</button>
@@ -6059,7 +6168,7 @@ function renderShoppingView() {
   if (!listArea || !pickerArea) return;
 
   // The list itself, grouped by category
-  const storeBanner = storeMode ? `<div class="store-banner">Store mode — large type, checked items hidden</div>` : '';
+  const storeBanner = storeMode ? `<div class="store-banner">Store mode — large type, checked items hidden, screen stays on</div>` : '';
   const visibleList = storeMode ? shoppingList.filter(i => !i.checked) : shoppingList;
   if (!shoppingList.length) {
     listArea.innerHTML = `${storeBanner}<div class="empty-state">Your list is empty — add an item above, or pull ingredients from this week's menu below.</div>`;
@@ -6657,14 +6766,9 @@ document.getElementById('syncStatusBtn').addEventListener('click', openSyncModal
 document.getElementById('exportBtn').addEventListener('click', exportHtml);
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
-(() => {
-  let savedView = null;
-  try { savedView = localStorage.getItem(LAST_VIEW_KEY); } catch (e) { /* ignore */ }
-  const validViews = ['recipes', 'menu', 'rotation', 'suggestions', 'try', 'shopping', 'insights'];
-  if (savedView && validViews.includes(savedView) && savedView !== 'recipes') {
-    setTimeout(() => switchView(savedView), 0);
-  }
-})();
+// Each launch opens on Tonight. The last tab you used stays available while
+// the app is open, and the next time you tap the icon you land on tonight again.
+setTimeout(() => switchView('menu'), 0);
 document.getElementById('recipeSearchBox').addEventListener('input', renderRecipesList);
 document.getElementById('recipeSortSelect').addEventListener('change', e => { recipeSortMode = e.target.value; recipeCuisinePick = 'all'; renderRecipesList(); });
 document.getElementById('recipeCuisinePickSelect').addEventListener('change', e => { recipeCuisinePick = e.target.value; renderRecipesList(); });
@@ -6695,6 +6799,9 @@ document.getElementById('menuTodayBtn').addEventListener('click', () => {
   renderMenuView();
 });
 document.getElementById('menuPrintBtn').addEventListener('click', printMenu);
+document.getElementById('menuLargePrintBtn').addEventListener('click', printLargeMenu);
+document.getElementById('easyReadingBtn').addEventListener('click', () => setEasyReading(!easyReading));
+setEasyReading(easyReading);
 document.getElementById('repeatWeekBtn').addEventListener('click', toggleRepeatWeekPanel);
 document.getElementById('favoritesWeekBtn').addEventListener('click', fillWeekWithFavorites);
 document.getElementById('storeModeBtn').addEventListener('click', () => {

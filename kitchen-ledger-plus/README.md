@@ -35,5 +35,8 @@ Recipes, menu planner, rotation, suggestions, shopping list, insights, cooking m
 - A name on new dishes, planned dinners, and shopping items.
 - A **Want to try** shelf (name, link, and a note). It does not copy a full recipe off the web.
 - **Repeat a past week** and **Fill open days with favorites** on the Menu Planner.
-- **Store mode** on the shopping list: larger type, checked items hidden, menu picker tucked away.
+- **Store mode** on the shopping list: larger type, checked items hidden, menu picker tucked away, and the screen stays awake.
+- **Easy reading** (the Aa button) enlarges the week, recipes, and list on that phone.
+- Plus opens on Tonight, with Cook this and Shopping list.
+- **Fridge sheet** prints the week on screen in large type.
 - Uploaded photos stay on the phone that added them, so they are left out of the family-share payload.
