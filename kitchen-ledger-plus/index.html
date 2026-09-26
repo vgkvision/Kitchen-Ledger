@@ -1745,7 +1745,12 @@ function showUndoToast(msg, undoFn) {
 // Printing — shows only the given element (by id) when printing,
 // hiding the rest of the page, then restores normal view after.
 // ---------------------------------------------------------------
-function printElement(elementId) {
+function printElement(elementId, button) {
+  if (phoneNeedsShareToPrint()) {
+    if (button) button.textContent = 'Opening…';
+    presentToPhone(blocksFromElement(elementId), 'kitchen-ledger');
+    return;
+  }
   document.body.setAttribute('data-print-target', elementId);
   document.body.classList.add('printing');
   window.print();
@@ -4601,16 +4606,169 @@ function printMenu() {
       <button class="picker-action-btn picker-secondary" data-action="close-print-menu">Close</button>
     </div>`;
   modal.querySelector('[data-action="close-print-menu"]').addEventListener('click', closePrintMenuModal);
-  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', () => printElement('printMenuContent'));
+  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', (e) => printElement('printMenuContent', e.currentTarget));
   document.getElementById('printMenuOverlay').classList.add('show');
 }
 function closePrintMenuModal() { document.getElementById('printMenuOverlay').classList.remove('show'); }
 
 function phoneNeedsShareToPrint() {
   const ua = navigator.userAgent || '';
-  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
-  return ios || standalone;
+  return /iPad|iPhone|iPod/.test(ua)
+    || ((navigator.platform === 'MacIntel' || /Macintosh/.test(ua)) && navigator.maxTouchPoints > 1);
+}
+
+function blocksFromElement(elementId) {
+  const el = document.getElementById(elementId);
+  const raw = el ? (el.innerText || el.textContent || '') : '';
+  const lines = raw.split(/\n/).map(s => s.trim()).filter(Boolean);
+  if (!lines.length) return [{ text: 'Nothing to print', size: 18, gap: 28 }];
+  return lines.map(text => ({ text, size: /[a-z]/.test(text) ? 16 : 13, gap: 24 }));
+}
+
+function dataUrlToBlob(dataUrl) {
+  const parts = String(dataUrl).split(',');
+  const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'image/png';
+  const bin = atob(parts[1] || '');
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function canShareFile(file) {
+  try {
+    return !!(file && navigator.share && navigator.canShare && navigator.canShare({ files: [file] }));
+  } catch (e) {
+    return false;
+  }
+}
+
+function wrapCanvasLine(ctx, text, maxWidth) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  words.forEach(word => {
+    const next = cur ? cur + ' ' + word : word;
+    if (cur && ctx.measureText(next).width > maxWidth) {
+      lines.push(cur);
+      cur = word;
+    } else cur = next;
+  });
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+function drawSheetCanvas(blocks) {
+  const width = 1200;
+  const pad = 72;
+  const scale = 2.35;
+  const measure = document.createElement('canvas').getContext('2d');
+  const wrapped = [];
+  blocks.forEach(block => {
+    const fontSize = Math.max(22, Math.round((block.size || 16) * scale));
+    measure.font = fontSize + 'px Georgia, "Times New Roman", serif';
+    wrapCanvasLine(measure, block.text, width - pad * 2).forEach(line => {
+      wrapped.push({
+        line,
+        fontSize,
+        gray: !!block.gray,
+        step: Math.round((block.gap || ((block.size || 16) + 10)) * scale * 0.72)
+      });
+    });
+  });
+  const height = pad * 2 + wrapped.reduce((sum, item) => sum + item.step, 0);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = Math.min(Math.max(height, 480), 14000);
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  let y = pad;
+  wrapped.forEach(item => {
+    if (y > canvas.height - pad) return;
+    ctx.fillStyle = item.gray ? '#6e655c' : '#1a1614';
+    ctx.font = item.fontSize + 'px Georgia, "Times New Roman", serif';
+    ctx.fillText(item.line, pad, y + item.fontSize * 0.8);
+    y += item.step;
+  });
+  return canvas;
+}
+
+function resetOpeningButton() {
+  document.querySelectorAll('.picker-overlay.show button').forEach(btn => {
+    if (btn.textContent.trim() === 'Opening…') btn.textContent = 'Print';
+  });
+}
+
+function showHeldSheet(dataUrl) {
+  const modal = document.querySelector('.picker-overlay.show .picker-modal');
+  resetOpeningButton();
+  if (!modal) {
+    showToast('Press and hold the sheet, then tap Share, then Print.');
+    return;
+  }
+  if (modal.querySelector('[data-held-sheet]')) return;
+  const box = document.createElement('div');
+  box.dataset.heldSheet = '1';
+  box.style.margin = '14px 0 4px';
+  box.innerHTML = '<p class="sync-step">Press and hold the picture, tap Share, then choose Print.</p>';
+  const img = document.createElement('img');
+  img.alt = 'Sheet to print';
+  img.src = dataUrl;
+  img.style.cssText = 'width:100%;height:auto;border:1px solid rgba(41,36,32,0.15);background:#fff;';
+  box.appendChild(img);
+  const actions = modal.querySelector('.picker-actions');
+  if (actions) modal.insertBefore(box, actions);
+  else modal.appendChild(box);
+}
+
+function presentToPhone(blocks, baseName) {
+  const safeBlocks = blocks && blocks.length ? blocks : [{ text: 'Nothing to print', size: 18, gap: 28 }];
+  let pdfFile = null;
+  try {
+    pdfFile = new File(
+      [new Blob([buildSimplePdf(safeBlocks)], { type: 'application/pdf' })],
+      baseName + '.pdf',
+      { type: 'application/pdf' }
+    );
+  } catch (e) {
+    pdfFile = null;
+  }
+  if (canShareFile(pdfFile)) {
+    navigator.share({ files: [pdfFile] }).then(resetOpeningButton).catch(err => {
+      if (err && err.name === 'AbortError') { resetOpeningButton(); return; }
+      revealSheetPicture(safeBlocks);
+    });
+    return;
+  }
+  let pngFile = null;
+  let pngUrl = '';
+  if (safeBlocks.length <= 90) {
+    try {
+      pngUrl = drawSheetCanvas(safeBlocks).toDataURL('image/png');
+      pngFile = new File([dataUrlToBlob(pngUrl)], baseName + '.png', { type: 'image/png' });
+    } catch (e) {
+      pngFile = null;
+      pngUrl = '';
+    }
+  }
+  if (canShareFile(pngFile)) {
+    const url = pngUrl;
+    navigator.share({ files: [pngFile] }).then(resetOpeningButton).catch(err => {
+      if (err && err.name === 'AbortError') { resetOpeningButton(); return; }
+      if (url) showHeldSheet(url);
+    });
+    return;
+  }
+  if (pngUrl) showHeldSheet(pngUrl);
+  else showToast('This phone could not open the share sheet.');
+}
+
+function revealSheetPicture(blocks) {
+  try {
+    showHeldSheet(drawSheetCanvas(blocks).toDataURL('image/png'));
+  } catch (e) {
+    showToast('The share sheet did not open.');
+  }
 }
 
 function pdfSafe(text) {
@@ -4698,27 +4856,8 @@ function fridgeSheetBlocks() {
   return blocks;
 }
 
-async function shareFridgeSheet() {
-  const bytes = buildSimplePdf(fridgeSheetBlocks());
-  const blob = new Blob([bytes], { type: 'application/pdf' });
-  const file = new File([blob], 'fridge-sheet.pdf', { type: 'application/pdf' });
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try {
-      await navigator.share({ files: [file], title: 'This week' });
-      return;
-    } catch (e) {
-      if (e && e.name === 'AbortError') return;
-    }
-  }
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'fridge-sheet.pdf';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2500);
-  showToast('Sheet saved. Open it, then tap Share and Print.');
+function shareFridgeSheet() {
+  presentToPhone(fridgeSheetBlocks(), 'fridge-sheet');
 }
 
 function printLargeMenu() {
@@ -4743,14 +4882,16 @@ function printLargeMenu() {
       ${days}
     </div>
     <div class="picker-actions">
-      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="do-print-menu">${icon('print')} ${phoneNeedsShareToPrint() ? 'Share to print' : 'Print'}</button>
+      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="do-print-menu">${icon('print')} Print</button>
       <button class="picker-action-btn picker-secondary" data-action="close-print-menu">Close</button>
     </div>
-    ${phoneNeedsShareToPrint() ? '<p class="sync-step">On iPhone, tap Share to print, then choose Print.</p>' : ''}`;
+    ${phoneNeedsShareToPrint() ? '<p class="sync-step">On iPhone, tap Print. Choose Print in the share sheet. If a picture appears instead, press and hold it, tap Share, then Print.</p>' : ''}`;
   modal.querySelector('[data-action="close-print-menu"]').addEventListener('click', closePrintMenuModal);
-  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', () => {
-    if (phoneNeedsShareToPrint()) shareFridgeSheet();
-    else printElement('printMenuContent');
+  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', (e) => {
+    if (phoneNeedsShareToPrint()) {
+      e.currentTarget.textContent = 'Opening…';
+      shareFridgeSheet();
+    } else printElement('printMenuContent');
   });
   document.getElementById('printMenuOverlay').classList.add('show');
 }
@@ -5998,7 +6139,7 @@ function openShoppingPrintPreview() {
       <button class="picker-action-btn picker-secondary" data-action="close-shopping-print">Close</button>
     </div>`;
   modal.querySelector('[data-action="close-shopping-print"]').addEventListener('click', closeShoppingPrintPreview);
-  modal.querySelector('[data-action="do-print-shopping"]').addEventListener('click', () => printElement('shoppingPrintContent'));
+  modal.querySelector('[data-action="do-print-shopping"]').addEventListener('click', (e) => printElement('shoppingPrintContent', e.currentTarget));
   document.getElementById('shoppingPrintOverlay').classList.add('show');
 }
 function closeShoppingPrintPreview() { document.getElementById('shoppingPrintOverlay').classList.remove('show'); }
@@ -6042,7 +6183,7 @@ function openRecipePrintPreview(sectionId, dishName) {
       <button class="picker-action-btn picker-secondary" data-action="close-recipe-print">Close</button>
     </div>`;
   modal.querySelector('[data-action="close-recipe-print"]').addEventListener('click', closeRecipePrintPreview);
-  modal.querySelector('[data-action="do-print-recipe"]').addEventListener('click', () => printElement('recipePrintContent'));
+  modal.querySelector('[data-action="do-print-recipe"]').addEventListener('click', (e) => printElement('recipePrintContent', e.currentTarget));
   document.getElementById('recipePrintOverlay').classList.add('show');
 }
 function closeRecipePrintPreview() { document.getElementById('recipePrintOverlay').classList.remove('show'); }
@@ -6096,7 +6237,7 @@ function openCookbookPrintPreview() {
       <button class="picker-action-btn picker-secondary" data-action="close-cookbook-print">Close</button>
     </div>`;
   modal.querySelector('[data-action="close-cookbook-print"]').addEventListener('click', closeCookbookPrintPreview);
-  modal.querySelector('[data-action="do-print-cookbook"]').addEventListener('click', () => printElement('cookbookPrintContent'));
+  modal.querySelector('[data-action="do-print-cookbook"]').addEventListener('click', (e) => printElement('cookbookPrintContent', e.currentTarget));
   document.getElementById('cookbookPrintOverlay').classList.add('show');
 }
 function closeCookbookPrintPreview() { document.getElementById('cookbookPrintOverlay').classList.remove('show'); }
@@ -6152,7 +6293,7 @@ function openHelpModal() {
       <p>A read-only summary of your rotation — dishes by category, cuisine, and cookbook, dietary tags in use, and what hasn't been made in 60+ days or ever. Everything here is clickable and jumps you straight to that dish or filtered view.</p>
 
       <div class="help-section-title">Printing & sharing</div>
-      <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. <strong>Fridge sheet</strong> on the Menu Planner makes the week large type for the refrigerator. On the iPhone home-screen icon, that button says Share to print: tap it, then choose Print. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page.</p>
+      <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. <strong>Fridge sheet</strong> on the Menu Planner makes the week large type for the refrigerator. On the iPhone home-screen icon, Print opens the share sheet — choose Print there. If a picture appears instead, press and hold it, tap Share, then Print. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page.</p>
 
       <div class="help-section-title">Family sharing</div>
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
