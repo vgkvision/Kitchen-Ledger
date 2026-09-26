@@ -917,6 +917,13 @@
     font-family: Georgia, 'Times New Roman', serif; font-size: 18px; line-height: 1.35; margin-top: 4px; color: #292420;
   }
   .fridge-day-dish.open { color: #8a8076; font-style: italic; }
+  @media print {
+    .fridge-sheet-title { font-size: 26px; }
+    .fridge-sheet-range { font-size: 12px; margin-top: 4px; padding-bottom: 6px; }
+    .fridge-day { padding: 6px 12px 5px; }
+    .fridge-day-name { font-size: 20px; }
+    .fridge-day-dish { font-size: 14px; margin-top: 1px; }
+  }
   .repeat-panel {
     max-width: 720px; margin: 0 auto 18px; text-align: left; background: var(--tint);
     border: 1px solid var(--hairline); border-radius: 8px; padding: 14px 14px 8px;
@@ -4177,7 +4184,13 @@ function isoOf(date) {
 }
 function addDays(date, n) { const d = new Date(date); d.setDate(d.getDate() + n); return d; }
 function addMonths(date, n) { const d = new Date(date); d.setMonth(d.getMonth() + n); return d; }
-function startOfWeek(date) { const d = new Date(date); d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d; }
+function startOfWeek(date) {
+  const d = new Date(date);
+  // Saturday through Friday, matching how the family plans the menu.
+  d.setDate(d.getDate() - ((d.getDay() + 1) % 7));
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 function getWeekDates(anchor) {
   const start = startOfWeek(anchor);
   return Array.from({ length: 7 }, (_, i) => addDays(start, i));
@@ -4508,7 +4521,7 @@ function renderMenuView() {
   } else {
     label.textContent = menuAnchor.toLocaleDateString('en-US',{month:'long',year:'numeric'});
     grid.className = 'month-grid';
-    const dow = ['S','M','T','W','T','F','S'].map(d => `<div class="month-dow">${d}</div>`).join('');
+    const dow = ['Sa','Su','M','T','W','Th','F'].map(d => `<div class="month-dow">${d}</div>`).join('');
     const weeks = getMonthMatrix(menuAnchor);
     const cells = weeks.flat().map(d => {
       const inMonth = d.getMonth() === menuAnchor.getMonth();
@@ -4904,17 +4917,17 @@ function fridgeSheetBlocks() {
 }
 
 function layoutFridgeSheet(model) {
-  const pageW = 612, pageH = 792, left = 40, right = 572, bottom = 40;
-  const daySize = 26, dishSize = 16, dateSize = 11;
+  const pageW = 612, pageH = 792, left = 50, right = 562, bottom = 64;
+  const daySize = 22, dishSize = 14, dateSize = 10;
   const innerW = right - left - 28;
   const measured = model.days.map(day => {
     const lines = day.items.length
       ? day.items.flatMap(name => wrapPdfLine(name, dishSize, innerW))
       : ['Open'];
-    const h = Math.max(70, 8 + daySize + 4 + lines.length * (dishSize + 4) + 8);
+    const h = Math.max(58, 6 + daySize + 3 + lines.length * (dishSize + 3) + 6);
     return { day, lines, h, open: !day.items.length };
   });
-  const headerEnd = (pageTop) => pageTop - 86;
+  const headerEnd = (pageTop) => pageTop - 70;
   const pages = [];
   let remaining = measured.slice();
   while (remaining.length) {
@@ -4948,9 +4961,9 @@ function layoutFridgeSheet(model) {
 function fridgeHeaderCmds(model, pageH, left, right) {
   const top = pageH - 46;
   const cmds = [];
-  cmds.push(`0 0 0 rg\nBT /F2 30 Tf ${left} ${top - 30} Td (${pdfSafe('This week')}) Tj ET`);
-  cmds.push(`0.43 0.40 0.36 rg\nBT /F1 12 Tf ${left} ${top - 52} Td (${pdfSafe(model.range)}) Tj ET`);
-  cmds.push(`0.16 0.14 0.12 RG\n1.8 w\n${left} ${top - 66} m ${right} ${top - 66} l S`);
+  cmds.push(`0 0 0 rg\nBT /F2 26 Tf ${left} ${top - 26} Td (${pdfSafe('This week')}) Tj ET`);
+  cmds.push(`0.43 0.40 0.36 rg\nBT /F1 11 Tf ${left} ${top - 42} Td (${pdfSafe(model.range)}) Tj ET`);
+  cmds.push(`0.16 0.14 0.12 RG\n1.4 w\n${left} ${top - 52} m ${right} ${top - 52} l S`);
   return cmds;
 }
 
@@ -4963,12 +4976,12 @@ function buildFridgeSheetPdf(model) {
       const fill = band.day.shade ? '0.957 0.937 0.902 rg' : '1 1 1 rg';
       cmds.push(`${fill}\n${layout.left} ${yBottom.toFixed(2)} ${(layout.right - layout.left)} ${band.h.toFixed(2)} re f`);
       cmds.push(`0.82 0.78 0.72 RG\n0.8 w\n${layout.left} ${yBottom.toFixed(2)} m ${layout.right} ${yBottom.toFixed(2)} l S`);
-      const nameY = band.yTop - 16 - layout.daySize;
+      const nameY = band.yTop - 12 - layout.daySize;
       cmds.push(`0.10 0.09 0.08 rg\nBT /F2 ${layout.daySize} Tf ${layout.left + 16} ${nameY.toFixed(2)} Td (${pdfSafe(band.day.name)}) Tj ET`);
       const dateText = pdfSafe(band.day.date);
       const dateX = layout.right - 16 - dateText.length * layout.dateSize * 0.52;
       cmds.push(`0.43 0.40 0.36 rg\nBT /F1 ${layout.dateSize} Tf ${dateX.toFixed(2)} ${(nameY + 4).toFixed(2)} Td (${dateText}) Tj ET`);
-      let dishY = nameY - 10 - layout.dishSize;
+      let dishY = nameY - 6 - layout.dishSize;
       const dishColor = band.open ? '0.54 0.50 0.46 rg' : '0.16 0.14 0.12 rg';
       band.lines.forEach(line => {
         cmds.push(`${dishColor}\nBT /F1 ${layout.dishSize} Tf ${layout.left + 16} ${dishY.toFixed(2)} Td (${line}) Tj ET`);
@@ -5016,14 +5029,14 @@ function drawFridgeSheetCanvas(model) {
     const origin = pi * layout.pageH * scale;
     const toY = (pdfY) => origin + (layout.pageH - pdfY) * scale;
     ctx.fillStyle = '#1a1614';
-    ctx.font = `600 ${30 * scale}px Georgia, "Times New Roman", serif`;
-    ctx.fillText('This week', layout.left * scale, toY(layout.pageH - 46 - 30));
+    ctx.font = `600 ${26 * scale}px Georgia, "Times New Roman", serif`;
+    ctx.fillText('This week', layout.left * scale, toY(layout.pageH - 46 - 26));
     ctx.fillStyle = '#6e655c';
-    ctx.font = `${12 * scale}px Georgia, "Times New Roman", serif`;
-    ctx.fillText(model.range, layout.left * scale, toY(layout.pageH - 46 - 52));
+    ctx.font = `${11 * scale}px Georgia, "Times New Roman", serif`;
+    ctx.fillText(model.range, layout.left * scale, toY(layout.pageH - 46 - 42));
     ctx.strokeStyle = '#292420';
-    ctx.lineWidth = 1.8 * scale;
-    const ruleY = toY(layout.pageH - 46 - 66);
+    ctx.lineWidth = 1.4 * scale;
+    const ruleY = toY(layout.pageH - 46 - 52);
     ctx.beginPath();
     ctx.moveTo(layout.left * scale, ruleY);
     ctx.lineTo(layout.right * scale, ruleY);
@@ -5043,7 +5056,7 @@ function drawFridgeSheetCanvas(model) {
       ctx.stroke();
       ctx.fillStyle = '#1a1614';
       ctx.font = `700 ${layout.daySize * scale}px Georgia, "Times New Roman", serif`;
-      const nameBaseline = y + (16 + layout.daySize) * scale;
+      const nameBaseline = y + (12 + layout.daySize) * scale;
       ctx.fillText(band.day.name, (layout.left + 16) * scale, nameBaseline);
       ctx.fillStyle = '#6e655c';
       ctx.font = `600 ${layout.dateSize * scale}px Georgia, "Times New Roman", serif`;
@@ -5051,7 +5064,7 @@ function drawFridgeSheetCanvas(model) {
       ctx.fillText(band.day.date.toUpperCase(), layout.right * scale - 16 * scale - dateW, nameBaseline - 6 * scale);
       ctx.fillStyle = band.open ? '#8a8076' : '#292420';
       ctx.font = `${band.open ? 'italic ' : ''}${layout.dishSize * scale}px Georgia, "Times New Roman", serif`;
-      let dishBaseline = nameBaseline + (10 + layout.dishSize) * scale;
+      let dishBaseline = nameBaseline + (6 + layout.dishSize) * scale;
       band.lines.forEach(line => {
         const plain = line.replace(/\\([()\\])/g, '$1');
         ctx.fillText(plain, (layout.left + 16) * scale, dishBaseline);
