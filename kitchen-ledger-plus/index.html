@@ -4583,6 +4583,121 @@ function printMenu() {
 }
 function closePrintMenuModal() { document.getElementById('printMenuOverlay').classList.remove('show'); }
 
+function phoneNeedsShareToPrint() {
+  const ua = navigator.userAgent || '';
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = window.navigator.standalone === true || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
+  return ios || standalone;
+}
+
+function pdfSafe(text) {
+  return String(text || '')
+    .replace(/[\u2018\u2019\u2032]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, '-')
+    .replace(/\u2026/g, '...')
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)');
+}
+
+function wrapPdfLine(text, size, maxWidth) {
+  const words = pdfSafe(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let cur = '';
+  const charW = size * 0.48;
+  words.forEach(word => {
+    const next = cur ? cur + ' ' + word : word;
+    if (cur && next.length * charW > maxWidth) {
+      lines.push(cur);
+      cur = word;
+    } else cur = next;
+  });
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [''];
+}
+
+function buildSimplePdf(blocks) {
+  const pageW = 612, pageH = 792, margin = 54, maxW = pageW - margin * 2;
+  const pages = [[]];
+  let y = pageH - margin;
+  blocks.forEach(block => {
+    wrapPdfLine(block.text, block.size, maxW).forEach(line => {
+      const step = block.gap || (block.size + 10);
+      if (y - step < margin) {
+        pages.push([]);
+        y = pageH - margin;
+      }
+      const color = block.gray ? '0.45 0.45 0.45 rg' : '0 0 0 rg';
+      pages[pages.length - 1].push(`${color}\nBT /F1 ${block.size} Tf ${margin} ${Math.round(y - block.size)} Td (${line}) Tj ET`);
+      y -= step;
+    });
+  });
+  const streams = pages.map(cmds => cmds.join('\n'));
+  const objs = [];
+  const fontNum = 3 + streams.length * 2;
+  const kids = streams.map((_, i) => `${3 + i * 2} 0 R`).join(' ');
+  objs.push('<< /Type /Catalog /Pages 2 0 R >>');
+  objs.push(`<< /Type /Pages /Kids [${kids}] /Count ${streams.length} >>`);
+  streams.forEach((stream, i) => {
+    const contentNum = 4 + i * 2;
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW} ${pageH}] /Contents ${contentNum} 0 R /Resources << /Font << /F1 ${fontNum} 0 R >> >> >>`);
+    objs.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+  objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>');
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objs.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach(off => { pdf += String(off).padStart(10, '0') + ' 00000 n \n'; });
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new TextEncoder().encode(pdf);
+}
+
+function fridgeSheetBlocks() {
+  const dates = getWeekDates(menuAnchor);
+  const title = `${dates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – ${dates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
+  const blocks = [
+    { text: 'This week', size: 28, gap: 34 },
+    { text: title, size: 14, gap: 28, gray: true },
+  ];
+  dates.forEach(d => {
+    blocks.push({ text: d.toLocaleDateString('en-US',{weekday:'long'}).toUpperCase(), size: 12, gap: 18, gray: true });
+    const items = dayItems(isoOf(d));
+    if (!items.length) blocks.push({ text: 'Open', size: 22, gap: 26, gray: true });
+    else items.forEach(it => blocks.push({ text: menuItemLabel(it), size: 22, gap: 26 }));
+  });
+  return blocks;
+}
+
+async function shareFridgeSheet() {
+  const bytes = buildSimplePdf(fridgeSheetBlocks());
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const file = new File([blob], 'fridge-sheet.pdf', { type: 'application/pdf' });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: 'This week' });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fridge-sheet.pdf';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2500);
+  showToast('Sheet saved. Open it, then tap Share and Print.');
+}
+
 function printLargeMenu() {
   const dates = getWeekDates(menuAnchor);
   const title = `${dates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – ${dates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
@@ -4605,11 +4720,15 @@ function printLargeMenu() {
       ${days}
     </div>
     <div class="picker-actions">
-      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="do-print-menu">${icon('print')} Print</button>
+      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="do-print-menu">${icon('print')} ${phoneNeedsShareToPrint() ? 'Share to print' : 'Print'}</button>
       <button class="picker-action-btn picker-secondary" data-action="close-print-menu">Close</button>
-    </div>`;
+    </div>
+    ${phoneNeedsShareToPrint() ? '<p class="sync-step">On iPhone, tap Share to print, then choose Print.</p>' : ''}`;
   modal.querySelector('[data-action="close-print-menu"]').addEventListener('click', closePrintMenuModal);
-  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', () => printElement('printMenuContent'));
+  modal.querySelector('[data-action="do-print-menu"]').addEventListener('click', () => {
+    if (phoneNeedsShareToPrint()) shareFridgeSheet();
+    else printElement('printMenuContent');
+  });
   document.getElementById('printMenuOverlay').classList.add('show');
 }
 
@@ -6010,7 +6129,7 @@ function openHelpModal() {
       <p>A read-only summary of your rotation — dishes by category, cuisine, and cookbook, dietary tags in use, and what hasn't been made in 60+ days or ever. Everything here is clickable and jumps you straight to that dish or filtered view.</p>
 
       <div class="help-section-title">Printing & sharing</div>
-      <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. <strong>Fridge sheet</strong> on the Menu Planner prints the week on screen in large type, one page for the refrigerator. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page.</p>
+      <p>Recipes, the weekly menu, and the shopping list can all be printed, and the shopping list can also be downloaded or shared. <strong>Fridge sheet</strong> on the Menu Planner makes the week large type for the refrigerator. On the iPhone home-screen icon, that button says Share to print: tap it, then choose Print. "Print full cookbook" from the Recipes tab prints every full recipe you have, organized by category, with each category starting on a fresh page.</p>
 
       <div class="help-section-title">Family sharing</div>
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
