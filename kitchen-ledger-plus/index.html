@@ -718,7 +718,8 @@
       max-width: none !important; max-height: none !important; margin: 0 !important; overflow: visible !important;
     }
     body.printing[data-print-target="printMenuContent"] #printMenuOverlay .picker-eyebrow,
-    body.printing[data-print-target="printMenuContent"] #printMenuOverlay .picker-actions { display: none !important; }
+    body.printing[data-print-target="printMenuContent"] #printMenuOverlay .picker-actions,
+    body.printing[data-print-target="printMenuContent"] #printMenuOverlay .sync-step { display: none !important; }
     body.printing[data-print-target="shoppingPrintContent"] #shoppingPrintOverlay {
       display: block !important; position: static !important; background: none !important; padding: 0 !important;
     }
@@ -889,6 +890,33 @@
   .photo-steps { margin: 0 0 8px; padding-left: 1.2em; text-align: left; }
   .photo-steps li { margin: 0 0 10px; line-height: 1.45; }
   .photo-steps strong { font-weight: 600; }
+  .fridge-sheet { text-align: left; background: #fff; color: #292420; }
+  .fridge-sheet-title {
+    font-family: 'Fraunces', Georgia, serif; font-weight: 560; font-size: 34px;
+    line-height: 1; margin: 0; color: #292420;
+  }
+  .fridge-sheet-range {
+    font-family: 'Inter', sans-serif; font-size: 14px; color: #6e655c;
+    margin: 6px 0 0; padding-bottom: 10px; border-bottom: 2px solid #292420;
+  }
+  .fridge-day {
+    padding: 12px 14px 10px; border-bottom: 1px solid #e0d8cc; background: #fff;
+    break-inside: avoid; page-break-inside: avoid;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .fridge-day.shade { background: #f4efe6; }
+  .fridge-day-name {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    font-family: 'Fraunces', Georgia, serif; font-weight: 560; font-size: 28px; line-height: 1.05; color: #292420;
+  }
+  .fridge-day-name span {
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 600; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-dim); flex: none;
+  }
+  .fridge-day-dish {
+    font-family: Georgia, 'Times New Roman', serif; font-size: 18px; line-height: 1.35; margin-top: 4px; color: #292420;
+  }
+  .fridge-day-dish.open { color: #8a8076; font-style: italic; }
   .repeat-panel {
     max-width: 720px; margin: 0 auto 18px; text-align: left; background: var(--tint);
     border: 1px solid var(--hairline); border-radius: 8px; padding: 14px 14px 8px;
@@ -4721,30 +4749,35 @@ function showHeldSheet(dataUrl) {
   else modal.appendChild(box);
 }
 
-function presentToPhone(blocks, baseName) {
+function presentToPhone(blocks, baseName, artwork) {
   const safeBlocks = blocks && blocks.length ? blocks : [{ text: 'Nothing to print', size: 18, gap: 28 }];
+  let pdfBytes = null;
+  try {
+    pdfBytes = artwork && artwork.pdfBytes ? artwork.pdfBytes : buildSimplePdf(safeBlocks);
+  } catch (e) {
+    try { pdfBytes = buildSimplePdf(safeBlocks); } catch (err) { pdfBytes = null; }
+  }
   let pdfFile = null;
   try {
-    pdfFile = new File(
-      [new Blob([buildSimplePdf(safeBlocks)], { type: 'application/pdf' })],
-      baseName + '.pdf',
-      { type: 'application/pdf' }
-    );
+    if (pdfBytes) {
+      pdfFile = new File([new Blob([pdfBytes], { type: 'application/pdf' })], baseName + '.pdf', { type: 'application/pdf' });
+    }
   } catch (e) {
     pdfFile = null;
   }
+  const picture = () => (artwork && artwork.drawCanvas) ? artwork.drawCanvas() : drawSheetCanvas(safeBlocks);
   if (canShareFile(pdfFile)) {
     navigator.share({ files: [pdfFile] }).then(resetOpeningButton).catch(err => {
       if (err && err.name === 'AbortError') { resetOpeningButton(); return; }
-      revealSheetPicture(safeBlocks);
+      revealSheetPicture(safeBlocks, picture);
     });
     return;
   }
   let pngFile = null;
   let pngUrl = '';
-  if (safeBlocks.length <= 90) {
+  if (safeBlocks.length <= 90 || (artwork && artwork.drawCanvas)) {
     try {
-      pngUrl = drawSheetCanvas(safeBlocks).toDataURL('image/png');
+      pngUrl = picture().toDataURL('image/png');
       pngFile = new File([dataUrlToBlob(pngUrl)], baseName + '.png', { type: 'image/png' });
     } catch (e) {
       pngFile = null;
@@ -4763,9 +4796,10 @@ function presentToPhone(blocks, baseName) {
   else showToast('This phone could not open the share sheet.');
 }
 
-function revealSheetPicture(blocks) {
+function revealSheetPicture(blocks, picture) {
   try {
-    showHeldSheet(drawSheetCanvas(blocks).toDataURL('image/png'));
+    const canvas = picture ? picture() : drawSheetCanvas(blocks);
+    showHeldSheet(canvas.toDataURL('image/png'));
   } catch (e) {
     showToast('The share sheet did not open.');
   }
@@ -4840,46 +4874,228 @@ function buildSimplePdf(blocks) {
   return new TextEncoder().encode(pdf);
 }
 
-function fridgeSheetBlocks() {
+function fridgeSheetModel() {
   const dates = getWeekDates(menuAnchor);
-  const title = `${dates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – ${dates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
+  const range = `${dates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – ${dates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
+  return {
+    range,
+    days: dates.map((d, i) => ({
+      name: d.toLocaleDateString('en-US', { weekday: 'long' }),
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      shade: i % 2 === 0,
+      items: dayItems(isoOf(d)).map(menuItemLabel).filter(Boolean)
+    }))
+  };
+}
+
+function fridgeSheetBlocks() {
+  const model = fridgeSheetModel();
   const blocks = [
-    { text: 'This week', size: 28, gap: 34 },
-    { text: title, size: 14, gap: 28, gray: true },
+    { text: 'This week', size: 28, gap: 36 },
+    { text: model.range, size: 13, gap: 24, gray: true },
   ];
-  dates.forEach(d => {
-    blocks.push({ text: d.toLocaleDateString('en-US',{weekday:'long'}).toUpperCase(), size: 12, gap: 18, gray: true });
-    const items = dayItems(isoOf(d));
-    if (!items.length) blocks.push({ text: 'Open', size: 22, gap: 26, gray: true });
-    else items.forEach(it => blocks.push({ text: menuItemLabel(it), size: 22, gap: 26 }));
+  model.days.forEach(day => {
+    blocks.push({ text: day.name, size: 26, gap: 30 });
+    blocks.push({ text: day.date, size: 12, gap: 16, gray: true });
+    if (!day.items.length) blocks.push({ text: 'Open', size: 16, gap: 22, gray: true });
+    else day.items.forEach(name => blocks.push({ text: name, size: 16, gap: 20 }));
   });
   return blocks;
 }
 
+function layoutFridgeSheet(model) {
+  const pageW = 612, pageH = 792, left = 40, right = 572, bottom = 40;
+  const daySize = 26, dishSize = 16, dateSize = 11;
+  const innerW = right - left - 28;
+  const measured = model.days.map(day => {
+    const lines = day.items.length
+      ? day.items.flatMap(name => wrapPdfLine(name, dishSize, innerW))
+      : ['Open'];
+    const h = Math.max(70, 8 + daySize + 4 + lines.length * (dishSize + 4) + 8);
+    return { day, lines, h, open: !day.items.length };
+  });
+  const headerEnd = (pageTop) => pageTop - 86;
+  const pages = [];
+  let remaining = measured.slice();
+  while (remaining.length) {
+    const yStart = headerEnd(pageH - 46);
+    const room = yStart - bottom;
+    const chunk = [];
+    let used = 0;
+    for (const row of remaining) {
+      if (chunk.length && used + row.h > room) break;
+      chunk.push(row);
+      used += row.h;
+    }
+    if (chunk.length === measured.length && used < room) {
+      const extra = (room - used) / chunk.length;
+      chunk.forEach(row => { row.h += extra; });
+    }
+    let y = yStart;
+    const bands = chunk.map(row => {
+      const band = { yTop: y, h: row.h, day: row.day, lines: row.lines, open: row.open };
+      y -= row.h;
+      return band;
+    });
+    pages.push({ bands });
+    const placed = new Set(chunk);
+    remaining = remaining.filter(row => !placed.has(row));
+    if (!chunk.length) break;
+  }
+  return { pageW, pageH, left, right, bottom, daySize, dishSize, dateSize, pages };
+}
+
+function fridgeHeaderCmds(model, pageH, left, right) {
+  const top = pageH - 46;
+  const cmds = [];
+  cmds.push(`0 0 0 rg\nBT /F2 30 Tf ${left} ${top - 30} Td (${pdfSafe('This week')}) Tj ET`);
+  cmds.push(`0.43 0.40 0.36 rg\nBT /F1 12 Tf ${left} ${top - 52} Td (${pdfSafe(model.range)}) Tj ET`);
+  cmds.push(`0.16 0.14 0.12 RG\n1.8 w\n${left} ${top - 66} m ${right} ${top - 66} l S`);
+  return cmds;
+}
+
+function buildFridgeSheetPdf(model) {
+  const layout = layoutFridgeSheet(model);
+  const streams = layout.pages.map(page => {
+    const cmds = fridgeHeaderCmds(model, layout.pageH, layout.left, layout.right);
+    page.bands.forEach(band => {
+      const yBottom = band.yTop - band.h;
+      const fill = band.day.shade ? '0.957 0.937 0.902 rg' : '1 1 1 rg';
+      cmds.push(`${fill}\n${layout.left} ${yBottom.toFixed(2)} ${(layout.right - layout.left)} ${band.h.toFixed(2)} re f`);
+      cmds.push(`0.82 0.78 0.72 RG\n0.8 w\n${layout.left} ${yBottom.toFixed(2)} m ${layout.right} ${yBottom.toFixed(2)} l S`);
+      const nameY = band.yTop - 16 - layout.daySize;
+      cmds.push(`0.10 0.09 0.08 rg\nBT /F2 ${layout.daySize} Tf ${layout.left + 16} ${nameY.toFixed(2)} Td (${pdfSafe(band.day.name)}) Tj ET`);
+      const dateText = pdfSafe(band.day.date);
+      const dateX = layout.right - 16 - dateText.length * layout.dateSize * 0.52;
+      cmds.push(`0.43 0.40 0.36 rg\nBT /F1 ${layout.dateSize} Tf ${dateX.toFixed(2)} ${(nameY + 4).toFixed(2)} Td (${dateText}) Tj ET`);
+      let dishY = nameY - 10 - layout.dishSize;
+      const dishColor = band.open ? '0.54 0.50 0.46 rg' : '0.16 0.14 0.12 rg';
+      band.lines.forEach(line => {
+        cmds.push(`${dishColor}\nBT /F1 ${layout.dishSize} Tf ${layout.left + 16} ${dishY.toFixed(2)} Td (${line}) Tj ET`);
+        dishY -= layout.dishSize + 6;
+      });
+    });
+    return cmds.join('\n');
+  });
+  const objs = [];
+  const fontRoman = 3 + streams.length * 2;
+  const fontBold = fontRoman + 1;
+  const kids = streams.map((_, i) => `${3 + i * 2} 0 R`).join(' ');
+  objs.push('<< /Type /Catalog /Pages 2 0 R >>');
+  objs.push(`<< /Type /Pages /Kids [${kids}] /Count ${streams.length} >>`);
+  streams.forEach((stream, i) => {
+    const contentNum = 4 + i * 2;
+    objs.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${layout.pageW} ${layout.pageH}] /Contents ${contentNum} 0 R /Resources << /Font << /F1 ${fontRoman} 0 R /F2 ${fontBold} 0 R >> >> >>`);
+    objs.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+  });
+  objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>');
+  objs.push('<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>');
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  objs.forEach((body, i) => {
+    offsets.push(pdf.length);
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach(off => { pdf += String(off).padStart(10, '0') + ' 00000 n \n'; });
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return new TextEncoder().encode(pdf);
+}
+
+function drawFridgeSheetCanvas(model) {
+  const layout = layoutFridgeSheet(model);
+  const scale = 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = layout.pageW * scale;
+  canvas.height = layout.pageH * scale * layout.pages.length;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  layout.pages.forEach((page, pi) => {
+    const origin = pi * layout.pageH * scale;
+    const toY = (pdfY) => origin + (layout.pageH - pdfY) * scale;
+    ctx.fillStyle = '#1a1614';
+    ctx.font = `600 ${30 * scale}px Georgia, "Times New Roman", serif`;
+    ctx.fillText('This week', layout.left * scale, toY(layout.pageH - 46 - 30));
+    ctx.fillStyle = '#6e655c';
+    ctx.font = `${12 * scale}px Georgia, "Times New Roman", serif`;
+    ctx.fillText(model.range, layout.left * scale, toY(layout.pageH - 46 - 52));
+    ctx.strokeStyle = '#292420';
+    ctx.lineWidth = 1.8 * scale;
+    const ruleY = toY(layout.pageH - 46 - 66);
+    ctx.beginPath();
+    ctx.moveTo(layout.left * scale, ruleY);
+    ctx.lineTo(layout.right * scale, ruleY);
+    ctx.stroke();
+    page.bands.forEach(band => {
+      const x = layout.left * scale;
+      const w = (layout.right - layout.left) * scale;
+      const y = toY(band.yTop);
+      const h = band.h * scale;
+      ctx.fillStyle = band.day.shade ? '#f4efe6' : '#ffffff';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#d1c7b8';
+      ctx.lineWidth = 1 * scale;
+      ctx.beginPath();
+      ctx.moveTo(x, y + h);
+      ctx.lineTo(x + w, y + h);
+      ctx.stroke();
+      ctx.fillStyle = '#1a1614';
+      ctx.font = `700 ${layout.daySize * scale}px Georgia, "Times New Roman", serif`;
+      const nameBaseline = y + (16 + layout.daySize) * scale;
+      ctx.fillText(band.day.name, (layout.left + 16) * scale, nameBaseline);
+      ctx.fillStyle = '#6e655c';
+      ctx.font = `600 ${layout.dateSize * scale}px Georgia, "Times New Roman", serif`;
+      const dateW = ctx.measureText(band.day.date.toUpperCase()).width;
+      ctx.fillText(band.day.date.toUpperCase(), layout.right * scale - 16 * scale - dateW, nameBaseline - 6 * scale);
+      ctx.fillStyle = band.open ? '#8a8076' : '#292420';
+      ctx.font = `${band.open ? 'italic ' : ''}${layout.dishSize * scale}px Georgia, "Times New Roman", serif`;
+      let dishBaseline = nameBaseline + (10 + layout.dishSize) * scale;
+      band.lines.forEach(line => {
+        const plain = line.replace(/\\([()\\])/g, '$1');
+        ctx.fillText(plain, (layout.left + 16) * scale, dishBaseline);
+        dishBaseline += (layout.dishSize + 6) * scale;
+      });
+    });
+  });
+  return canvas;
+}
+
+function fridgeSheetHtml(model) {
+  const days = model.days.map(day => {
+    const dishes = day.items.length
+      ? day.items.map(name => `<div class="fridge-day-dish">${escapeHtml(name)}</div>`).join('')
+      : '<div class="fridge-day-dish open">Open</div>';
+    return `<section class="fridge-day${day.shade ? ' shade' : ''}">
+      <div class="fridge-day-name">${escapeHtml(day.name)}<span>${escapeHtml(day.date)}</span></div>
+      ${dishes}
+    </section>`;
+  }).join('');
+  return `<div class="fridge-sheet">
+    <h3 class="fridge-sheet-title">This week</h3>
+    <div class="fridge-sheet-range">${escapeHtml(model.range)}</div>
+    ${days}
+  </div>`;
+}
+
 function shareFridgeSheet() {
-  presentToPhone(fridgeSheetBlocks(), 'fridge-sheet');
+  const model = fridgeSheetModel();
+  let pdfBytes = null;
+  try { pdfBytes = buildFridgeSheetPdf(model); } catch (e) { pdfBytes = null; }
+  presentToPhone(fridgeSheetBlocks(), 'fridge-sheet', {
+    pdfBytes,
+    drawCanvas: () => drawFridgeSheetCanvas(model)
+  });
 }
 
 function printLargeMenu() {
-  const dates = getWeekDates(menuAnchor);
-  const title = `${dates[0].toLocaleDateString('en-US',{month:'long',day:'numeric'})} – ${dates[6].toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}`;
-  const days = dates.map(d => {
-    const items = dayItems(isoOf(d));
-    const names = items.length
-      ? items.map(it => `<div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:1.25;margin:2px 0 8px;">${escapeHtml(menuItemLabel(it))}</div>`).join('')
-      : `<div style="font-size:22px;color:#8a8076;margin:2px 0 8px;">Open</div>`;
-    return `<div style="border-bottom:1px solid #e4ddd4;padding:10px 0 4px;break-inside:avoid;">
-      <div style="font-family:Inter,sans-serif;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:#6e655c;">${d.toLocaleDateString('en-US',{weekday:'long'})}</div>
-      ${names}
-    </div>`;
-  }).join('');
+  const model = fridgeSheetModel();
   const modal = document.getElementById('printMenuModal');
   modal.innerHTML = `
     <div class="picker-eyebrow">Fridge sheet</div>
     <div id="printMenuContent" style="text-align:left;">
-      <h3 style="font-family:Georgia,'Times New Roman',serif;font-size:28px;margin:0 0 4px;">This week</h3>
-      <div style="font-size:16px;color:#6e655c;margin-bottom:8px;">${escapeHtml(title)}</div>
-      ${days}
+      ${fridgeSheetHtml(model)}
     </div>
     <div class="picker-actions">
       <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="do-print-menu">${icon('print')} Print</button>
