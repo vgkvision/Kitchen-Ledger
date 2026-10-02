@@ -450,6 +450,12 @@
   .menu-item-link { cursor: pointer; border-radius: 3px; transition: background 0.12s; }
   .menu-item-link:hover { background: var(--tint); }
   .day-card-empty { font-size: 0.78em; color: #b8a99a; font-style: italic; margin-top: auto; }
+  .vgk-game {
+    margin-top: 6px; padding: 4px 6px; text-align: left;
+    font-family: 'Inter', sans-serif; font-size: 0.75em; font-weight: 600; line-height: 1.3;
+    color: #3c3018; background: #f3e6c4; border-left: 3px solid #b4975a;
+  }
+  .month-cell .vgk-game { margin-top: 4px; font-size: 0.68em; }
   .day-card-tag { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .day-card-edit-btn, .month-cell-edit-btn {
     position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
@@ -4497,6 +4503,27 @@ function setEasyReading(on) {
 // ---------------------------------------------------------------
 // Menu planner — week / month views + day editor
 // ---------------------------------------------------------------
+let vgkGamesByDate = {};
+function vgkGameOn(iso) { return vgkGamesByDate[iso] || null; }
+function vgkGameLabel(game) {
+  if (!game) return '';
+  return `Knights vs ${game.opponent}${game.time ? ' · ' + game.time : ''}${game.preseason ? ' · preseason' : ''}`;
+}
+function vgkGameHtml(iso) {
+  const game = vgkGameOn(iso);
+  return game ? `<div class="vgk-game">${escapeHtml(vgkGameLabel(game))}</div>` : '';
+}
+function loadVgkSchedule() {
+  fetch('vgk-home.json').then(r => {
+    if (!r.ok) throw new Error('schedule');
+    return r.json();
+  }).then(data => {
+    vgkGamesByDate = {};
+    (data.games || []).forEach(g => { if (g && g.date) vgkGamesByDate[g.date] = g; });
+    renderMenuView();
+  }).catch(() => {});
+}
+
 function renderMenuView() {
   const label = document.getElementById('menuRangeLabel');
   const grid = document.getElementById('menuGrid');
@@ -4515,6 +4542,7 @@ function renderMenuView() {
           <button type="button" class="day-card-edit-btn" data-edit-day="${iso}" title="Edit this day" aria-label="Edit ${d.toLocaleDateString('en-US',{weekday:'long'})}">${icon('edit',{size:11})}</button>
           <div class="day-card-label">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>
           <div class="day-card-date">${d.getDate()}</div>
+          ${vgkGameHtml(iso)}
           ${items.length
             ? `<div class="day-card-items">${items.map(it => it.custom
                 ? `<div class="day-card-dish">${escapeHtml(menuItemLabel(it))}${it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : ''}</div>`
@@ -4538,6 +4566,7 @@ function renderMenuView() {
         <div class="month-cell ${iso === todayIso ? 'is-today' : ''}" data-day="${iso}" style="${inMonth ? '' : 'opacity:0.35'}">
           <button type="button" class="month-cell-edit-btn" data-edit-day="${iso}" title="Edit this day" aria-label="Edit ${d.toLocaleDateString('en-US',{month:'long',day:'numeric'})}">${icon('edit',{size:9})}</button>
           <div class="month-cell-date">${d.getDate()}</div>
+          ${vgkGameHtml(iso)}
           ${shown.map(it => it.custom
             ? `<div class="month-cell-dish">${escapeHtml(menuItemLabel(it))}</div>`
             : `<div class="month-cell-dish menu-item-link" data-section="${it.sectionId}" data-dish="${escapeHtml(it.dishName)}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(menuItemLabel(it))}</div>`
@@ -4567,11 +4596,13 @@ function renderMenuView() {
   const banner = document.getElementById('tonightBanner');
   if (banner) {
     const tonightItems = dayItems(todayIso);
+    const tonightGame = vgkGameOn(todayIso);
     if (tonightItems.length) {
       banner.innerHTML = `
         <div>
           <div class="tonight-banner-label">Tonight</div>
           <div class="tonight-banner-dishes">${tonightItems.map(it => escapeHtml(menuItemLabel(it))).join(' · ')}</div>
+          ${tonightGame ? `<div class="vgk-game">${escapeHtml(vgkGameLabel(tonightGame))} — usually out</div>` : ''}
         </div>
         <div class="tonight-actions">
           <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-cook-tonight>Cook this</button>
@@ -4583,7 +4614,7 @@ function renderMenuView() {
       banner.innerHTML = `
         <div>
           <div class="tonight-banner-label">Tonight</div>
-          <div class="tonight-banner-empty">Nothing planned yet — add dinner in one tap.</div>
+          <div class="tonight-banner-empty">${tonightGame ? escapeHtml(vgkGameLabel(tonightGame)) + ' — usually out tonight.' : 'Nothing planned yet — add dinner in one tap.'}</div>
         </div>
         <div class="tonight-actions">
           <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-plan-tonight>Plan tonight</button>
@@ -4916,6 +4947,8 @@ function fridgeSheetModel() {
     range,
     days: dates.map((d, i) => {
       const lines = fridgeSheetLines(dayItems(isoOf(d)));
+      const game = vgkGameOn(isoOf(d));
+      if (game) lines.push({ name: vgkGameLabel(game) + ' — usually out', entree: false });
       return {
         name: d.toLocaleDateString('en-US', { weekday: 'long' }),
         date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -6552,7 +6585,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes walks through copying a photographed recipe with the iPhone’s Live Text, then pasting it in.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes walks through copying a photographed recipe with the iPhone’s Live Text, then pasting it in. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
@@ -7306,6 +7339,7 @@ document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', (
 // Each launch opens on Tonight. The last tab you used stays available while
 // the app is open, and the next time you tap the icon you land on tonight again.
 setTimeout(() => switchView('menu'), 0);
+loadVgkSchedule();
 document.getElementById('recipeSearchBox').addEventListener('input', renderRecipesList);
 document.getElementById('recipeSortSelect').addEventListener('change', e => { recipeSortMode = e.target.value; recipeCuisinePick = 'all'; renderRecipesList(); });
 document.getElementById('recipeCuisinePickSelect').addEventListener('change', e => { recipeCuisinePick = e.target.value; renderRecipesList(); });
