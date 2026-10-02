@@ -1,0 +1,271 @@
+{
+  "team": "VGK",
+  "venue": "T-Mobile Arena",
+  "updated": "2026-10-02",
+  "games": [
+    {
+      "date": "2026-09-24",
+      "opponent": "Utah",
+      "time": "7:00 PM",
+      "preseason": true
+    },
+    {
+      "date": "2026-09-26",
+      "opponent": "San Jose",
+      "time": "7:00 PM",
+      "preseason": true
+    },
+    {
+      "date": "2026-09-29",
+      "opponent": "Chicago",
+      "time": "7:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-02",
+      "opponent": "Anaheim",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-08",
+      "opponent": "Toronto",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-10",
+      "opponent": "Los Angeles",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-15",
+      "opponent": "Calgary",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-17",
+      "opponent": "Pittsburgh",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-20",
+      "opponent": "Tampa Bay",
+      "time": "7:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-27",
+      "opponent": "Ottawa",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-10-30",
+      "opponent": "New Jersey",
+      "time": "3:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-11-11",
+      "opponent": "Utah",
+      "time": "6:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-11-13",
+      "opponent": "Nashville",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-11-15",
+      "opponent": "Vancouver",
+      "time": "6:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-11-17",
+      "opponent": "Dallas",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-11-19",
+      "opponent": "Dallas",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-11-28",
+      "opponent": "Montr\u00e9al",
+      "time": "1:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-12-03",
+      "opponent": "Utah",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-12-05",
+      "opponent": "Winnipeg",
+      "time": "4:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-12-16",
+      "opponent": "San Jose",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-12-18",
+      "opponent": "New York",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-12-21",
+      "opponent": "Carolina",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2026-12-31",
+      "opponent": "St. Louis",
+      "time": "12:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-02",
+      "opponent": "Colorado",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-07",
+      "opponent": "Minnesota",
+      "time": "6:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-09",
+      "opponent": "Seattle",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-20",
+      "opponent": "Edmonton",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-22",
+      "opponent": "Boston",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-28",
+      "opponent": "Buffalo",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-01-30",
+      "opponent": "Washington",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-02-13",
+      "opponent": "Calgary",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-02-15",
+      "opponent": "Detroit",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-02-18",
+      "opponent": "Columbus",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-02-24",
+      "opponent": "Florida",
+      "time": "6:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-02-26",
+      "opponent": "Anaheim",
+      "time": "6:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-03-09",
+      "opponent": "San Jose",
+      "time": "7:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-03-11",
+      "opponent": "Philadelphia",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-03-13",
+      "opponent": "New York",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-03-15",
+      "opponent": "Winnipeg",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-03-17",
+      "opponent": "Seattle",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-03-31",
+      "opponent": "Vancouver",
+      "time": "7:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-04-02",
+      "opponent": "Edmonton",
+      "time": "7:00 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-04-06",
+      "opponent": "St. Louis",
+      "time": "7:30 PM",
+      "preseason": false
+    },
+    {
+      "date": "2027-04-10",
+      "opponent": "Los Angeles",
+      "time": "7:30 PM",
+      "preseason": false
+    }
+  ]
+}
