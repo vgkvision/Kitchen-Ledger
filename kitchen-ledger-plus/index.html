@@ -456,6 +456,18 @@
     color: #3c3018; background: #f3e6c4; border-left: 3px solid #b4975a;
   }
   .month-cell .vgk-game { margin-top: 4px; font-size: 0.68em; }
+  .leftover-note {
+    margin-top: 6px; font-family: 'Inter', sans-serif; font-size: 0.72em; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--sides);
+  }
+  .month-cell .leftover-note { margin-top: 4px; font-size: 0.68em; }
+  .backup-reminder {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin: 0 0 16px; padding: 12px 14px; background: var(--tint);
+    border: 1px solid var(--hairline); border-radius: 8px; font-size: 0.92em;
+  }
+  .backup-reminder p { margin: 0; flex: 1 1 220px; line-height: 1.4; }
+  .backup-reminder[hidden] { display: none; }
   .day-card-tag { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
   .day-card-edit-btn, .month-cell-edit-btn {
     position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%;
@@ -1093,6 +1105,11 @@
       <h2>Menu Planner</h2>
       <p>Plan dinners day by day, then step back and see the week or month at a glance.</p>
     </div>
+    <div id="backupReminder" class="backup-reminder" hidden>
+      <p>Your cookbook lives on this phone. Save a backup so you have a copy.</p>
+      <button type="button" class="picker-action-btn picker-secondary" id="backupReminderSave">Save a backup</button>
+      <button type="button" class="picker-action-btn picker-secondary" id="backupReminderLater">Not now</button>
+    </div>
     <div id="tonightBanner"></div>
     <div class="menu-toolbar">
       <div class="mode-toggle">
@@ -1474,6 +1491,10 @@ const TRY_KEY = 'weeknight-plus-try-v1';
 const MEMBER_NAME_KEY = 'weeknight-plus-member-name-v1';
 const STORE_MODE_KEY = 'weeknight-plus-store-mode-v1';
 const EASY_READING_KEY = 'weeknight-plus-easy-reading-v1';
+const BACKUP_AT_KEY = 'weeknight-plus-backup-at-v1';
+const BACKUP_SNOOZE_KEY = 'weeknight-plus-backup-snooze-v1';
+const BACKUP_EVERY_MS = 30 * 24 * 60 * 60 * 1000;
+const BACKUP_SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 let localPhotos = {};
 let tryList = [];
 let storeMode = false;
@@ -1635,7 +1656,7 @@ function syncLastMadeFromMenu() {
       Object.keys(menu).forEach(iso => {
         if (iso > todayIso) return;
         (menu[iso] || []).forEach(item => {
-          if (item.custom) return;
+          if (item.custom || item.leftover) return;
           if (item.sectionId === sec.id && item.dishName === d.name) {
             if (!mostRecent || iso > mostRecent) mostRecent = iso;
           }
@@ -4404,13 +4425,18 @@ function copyWeekOntoAnchor(sourceStartIso) {
   const targetDates = getWeekDates(menuAnchor);
   const apply = () => {
     const who = memberName();
+    const leftGamesOpen = targetDates.some(d => vgkGameOn(isoOf(d)));
     sourceDates.forEach((sd, i) => {
+      const targetIso = isoOf(targetDates[i]);
+      if (vgkGameOn(targetIso)) {
+        delete menu[targetIso];
+        return;
+      }
       const items = dayItems(isoOf(sd)).map(it => {
         const copy = Object.assign({}, it);
         if (who) copy.plannedBy = who;
         return copy;
       });
-      const targetIso = isoOf(targetDates[i]);
       if (items.length) menu[targetIso] = items;
       else delete menu[targetIso];
     });
@@ -4418,12 +4444,12 @@ function copyWeekOntoAnchor(sourceStartIso) {
     if (panel) { panel.innerHTML = ''; panel.dataset.open = ''; }
     showWeekOnPlanner();
     saveMenu();
-    showToast('Week copied');
+    showToast(leftGamesOpen ? 'Week copied. Home-game nights were left open.' : 'Week copied');
   };
   const targetHas = targetDates.some(d => dayItems(isoOf(d)).length);
   if (targetHas) {
     showConfirmModal(
-      'This week already has dinners. Replace them with the past week?',
+      'This week already has dinners. Replace them with the past week? Nights with a Golden Knights home game stay open.',
       apply,
       { title: 'Repeat a past week', confirmLabel: 'Replace this week', dangerous: true }
     );
@@ -4444,8 +4470,12 @@ function fillWeekWithFavorites() {
     pool.push({ sec, dish: d });
   }));
   pool.sort((a, b) => (a.dish.lastMade || '0000-00-00').localeCompare(b.dish.lastMade || '0000-00-00'));
-  const open = dates.filter(d => !dayItems(isoOf(d)).length);
-  if (!open.length) { showToast('This week has no open days'); return; }
+  const skippedGames = dates.filter(d => vgkGameOn(isoOf(d)) && !dayItems(isoOf(d)).length);
+  const open = dates.filter(d => !dayItems(isoOf(d)).length && !vgkGameOn(isoOf(d)));
+  if (!open.length) {
+    showToast(skippedGames.length ? 'Home-game nights were left open' : 'This week has no open days');
+    return;
+  }
   if (!pool.length) { showToast('No favorites left to place. Heart a dish, or mark Jeff likes it.'); return; }
   const who = memberName();
   let placed = 0;
@@ -4459,7 +4489,8 @@ function fillWeekWithFavorites() {
   });
   showWeekOnPlanner();
   saveMenu();
-  showToast(placed === 1 ? 'Filled 1 open day' : `Filled ${placed} open days`);
+  const gameNote = skippedGames.length ? ' Home-game nights were left open.' : '';
+  showToast((placed === 1 ? 'Filled 1 open day' : `Filled ${placed} open days`) + gameNote);
 }
 
 function setStoreMode(on) {
@@ -4513,6 +4544,12 @@ function vgkGameHtml(iso) {
   const game = vgkGameOn(iso);
   return game ? `<div class="vgk-game">${escapeHtml(vgkGameLabel(game))}</div>` : '';
 }
+function dayHasLeftovers(iso) {
+  return dayItems(iso).some(it => it && it.leftover);
+}
+function leftoverHtml(iso) {
+  return dayHasLeftovers(iso) ? '<div class="leftover-note">Leftovers</div>' : '';
+}
 function loadVgkSchedule() {
   fetch('vgk-home.json').then(r => {
     if (!r.ok) throw new Error('schedule');
@@ -4543,6 +4580,7 @@ function renderMenuView() {
           <div class="day-card-label">${d.toLocaleDateString('en-US',{weekday:'short'})}</div>
           <div class="day-card-date">${d.getDate()}</div>
           ${vgkGameHtml(iso)}
+          ${leftoverHtml(iso)}
           ${items.length
             ? `<div class="day-card-items">${items.map(it => it.custom
                 ? `<div class="day-card-dish">${escapeHtml(menuItemLabel(it))}${it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : ''}</div>`
@@ -4567,6 +4605,7 @@ function renderMenuView() {
           <button type="button" class="month-cell-edit-btn" data-edit-day="${iso}" title="Edit this day" aria-label="Edit ${d.toLocaleDateString('en-US',{month:'long',day:'numeric'})}">${icon('edit',{size:9})}</button>
           <div class="month-cell-date">${d.getDate()}</div>
           ${vgkGameHtml(iso)}
+          ${leftoverHtml(iso)}
           ${shown.map(it => it.custom
             ? `<div class="month-cell-dish">${escapeHtml(menuItemLabel(it))}</div>`
             : `<div class="month-cell-dish menu-item-link" data-section="${it.sectionId}" data-dish="${escapeHtml(it.dishName)}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(menuItemLabel(it))}</div>`
@@ -4602,13 +4641,16 @@ function renderMenuView() {
         <div>
           <div class="tonight-banner-label">Tonight</div>
           <div class="tonight-banner-dishes">${tonightItems.map(it => escapeHtml(menuItemLabel(it))).join(' · ')}</div>
+          ${dayHasLeftovers(todayIso) ? '<div class="leftover-note">Leftovers</div>' : ''}
           ${tonightGame ? `<div class="vgk-game">${escapeHtml(vgkGameLabel(tonightGame))} — usually out</div>` : ''}
         </div>
         <div class="tonight-actions">
           <button type="button" class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-cook-tonight>Cook this</button>
+          <button type="button" class="picker-action-btn picker-secondary" data-leftovers-tonight>Leftovers tomorrow</button>
           <button type="button" class="picker-action-btn picker-secondary" data-shop-tonight>Shopping list</button>
         </div>`;
       banner.querySelector('[data-cook-tonight]').addEventListener('click', cookTonight);
+      banner.querySelector('[data-leftovers-tonight]').addEventListener('click', () => planLeftoversFrom(todayIso));
       banner.querySelector('[data-shop-tonight]').addEventListener('click', () => switchView('shopping'));
     } else {
       banner.innerHTML = `
@@ -4946,8 +4988,10 @@ function fridgeSheetModel() {
   return {
     range,
     days: dates.map((d, i) => {
-      const lines = fridgeSheetLines(dayItems(isoOf(d)));
-      const game = vgkGameOn(isoOf(d));
+      const iso = isoOf(d);
+      const lines = fridgeSheetLines(dayItems(iso));
+      if (dayHasLeftovers(iso)) lines.unshift({ name: 'Leftovers', entree: false });
+      const game = vgkGameOn(iso);
       if (game) lines.push({ name: vgkGameLabel(game) + ' — usually out', entree: false });
       return {
         name: d.toLocaleDateString('en-US', { weekday: 'long' }),
@@ -5206,7 +5250,7 @@ function renderDayEditor() {
           return `
           <div class="day-item-row">
             <span class="day-card-tag" style="background:${menuItemColor(it)}"></span>
-            <span class="day-item-label">${escapeHtml(menuItemLabel(it))}</span>
+            <span class="day-item-label">${escapeHtml(menuItemLabel(it))}${it.leftover ? ' <span class="leftover-note">Leftovers</span>' : ''}</span>
             ${base != null ? `
               <span class="day-item-servings">
                 <button type="button" class="scale-step-btn" data-servings-down="${idx}" aria-label="Fewer servings">−</button>
@@ -5216,7 +5260,8 @@ function renderDayEditor() {
             <button type="button" class="day-item-remove" data-idx="${idx}" title="Remove" aria-label="Remove this item">×</button>
           </div>`;
         }).join('')}
-      </div>` : `<div class="sync-step">Nothing planned yet — add as many dishes or extras as you like below.</div>`}
+      </div>
+      <button type="button" class="picker-action-btn picker-secondary" id="dayEditorLeftovers" style="width:100%;margin-top:8px;">Leftovers tomorrow</button>` : `<div class="sync-step">Nothing planned yet — add as many dishes or extras as you like below.</div>`}
     <div class="day-editor-divider" style="margin-top:16px;">Add a dish from your rotation</div>
     <input class="sync-input" id="dayEditorDishSearch" placeholder="Search dishes, or type a category like &quot;dessert&quot;..." value="${escapeHtml(dayEditorDishSearch)}">
     <div id="dayEditorDishResults" class="day-editor-dish-results"></div>
@@ -5238,6 +5283,8 @@ function renderDayEditor() {
   });
 
   modal.querySelector('[data-action="close-day-editor"]').addEventListener('click', closeDayEditor);
+  const leftoversBtn = document.getElementById('dayEditorLeftovers');
+  if (leftoversBtn) leftoversBtn.addEventListener('click', () => planLeftoversFrom(dayEditorIso));
   modal.querySelectorAll('.day-item-remove').forEach(btn => {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.idx, 10);
@@ -5290,6 +5337,39 @@ function renderDayEditor() {
     renderDayEditor();
     showToast('Added');
   });
+}
+
+function planLeftoversFrom(iso) {
+  const source = dayItems(iso);
+  if (!source.length) { showToast('Add dinner first'); return; }
+  const next = addDays(new Date(iso + 'T12:00:00'), 1);
+  const nextIso = isoOf(next);
+  const apply = () => {
+    const who = memberName();
+    menu[nextIso] = source.map(it => {
+      const copy = Object.assign({}, it);
+      copy.leftover = true;
+      if (who) copy.plannedBy = who;
+      return copy;
+    });
+    saveMenu();
+    const game = vgkGameOn(nextIso);
+    showToast(game ? 'Tomorrow is leftovers. That night is also a home game.' : 'Tomorrow is leftovers');
+  };
+  const existing = dayItems(nextIso);
+  if (existing.length && existing.every(it => it.leftover)) {
+    showToast('Tomorrow is already leftovers');
+    return;
+  }
+  if (existing.length) {
+    showConfirmModal(
+      'Tomorrow already has a plan. Replace it with leftovers?',
+      apply,
+      { title: 'Leftovers tomorrow', confirmLabel: 'Use leftovers', dangerous: true }
+    );
+    return;
+  }
+  apply();
 }
 
 function renderDayEditorDishResults() {
@@ -6329,22 +6409,78 @@ function buildShoppingListText() {
   return text.trim();
 }
 
+function backupIsDue() {
+  const now = Date.now();
+  let snooze = 0;
+  let savedAt = 0;
+  try {
+    snooze = parseInt(localStorage.getItem(BACKUP_SNOOZE_KEY) || '0', 10) || 0;
+    savedAt = parseInt(localStorage.getItem(BACKUP_AT_KEY) || '0', 10) || 0;
+  } catch (e) { /* show the reminder if storage cannot be read */ }
+  if (snooze && now < snooze) return false;
+  if (!savedAt) return true;
+  return now - savedAt > BACKUP_EVERY_MS;
+}
+
+function markBackupSaved() {
+  try {
+    localStorage.setItem(BACKUP_AT_KEY, String(Date.now()));
+    localStorage.removeItem(BACKUP_SNOOZE_KEY);
+  } catch (e) { /* ignore */ }
+  refreshBackupReminder();
+}
+
+function refreshBackupReminder() {
+  const el = document.getElementById('backupReminder');
+  if (!el) return;
+  if (backupIsDue()) el.hidden = false;
+  else el.hidden = true;
+}
+
+function snoozeBackupReminder() {
+  try { localStorage.setItem(BACKUP_SNOOZE_KEY, String(Date.now() + BACKUP_SNOOZE_MS)); } catch (e) { /* ignore */ }
+  refreshBackupReminder();
+}
+
 function downloadBackup() {
   const payload = {
     kind: 'kitchen-ledger-backup',
     exportedAt: new Date().toISOString(),
     sections, menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList,
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `kitchen-ledger-backup-${isoOf(new Date())}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  showToast('Backup downloaded');
+  const json = JSON.stringify(payload, null, 2);
+  const name = `kitchen-ledger-backup-${isoOf(new Date())}.json`;
+  const finishDownload = () => {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    markBackupSaved();
+    showToast('Backup downloaded');
+  };
+  if (phoneNeedsShareToPrint()) {
+    let file = null;
+    try { file = new File([json], name, { type: 'application/json' }); } catch (e) { file = null; }
+    if (!canShareFile(file)) {
+      try { file = new File([json], name, { type: 'text/plain' }); } catch (e) { file = null; }
+    }
+    if (canShareFile(file)) {
+      navigator.share({ files: [file] }).then(() => {
+        markBackupSaved();
+        showToast('Backup ready to save');
+      }).catch(err => {
+        if (err && err.name === 'AbortError') return;
+        finishDownload();
+      });
+      return;
+    }
+  }
+  finishDownload();
 }
 
 function restoreFromBackupFile(file) {
@@ -6585,7 +6721,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes walks through copying a photographed recipe with the iPhone’s Live Text, then pasting it in. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes walks through copying a photographed recipe with the iPhone’s Live Text, then pasting it in. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
@@ -6807,7 +6943,7 @@ function renderShoppingView() {
   dates.forEach(d => {
     const iso = isoOf(d);
     dayItems(iso).forEach(item => {
-      if (item.custom) return; // nothing to pick ingredients from for free-text menu entries
+      if (item.custom || item.leftover) return; // leftovers reuse last night's ingredients
       const found = dishLookup(item.sectionId, item.dishName);
       if (!found) return;
       const hasMainIngredients = found.dish.ingredients && found.dish.ingredients.length;
@@ -7334,6 +7470,9 @@ document.getElementById('pickerBtn').addEventListener('click', pickTonight);
 document.getElementById('syncBtn').addEventListener('click', openSyncModal);
 document.getElementById('syncStatusBtn').addEventListener('click', openSyncModal);
 document.getElementById('exportBtn').addEventListener('click', exportHtml);
+document.getElementById('backupReminderSave').addEventListener('click', downloadBackup);
+document.getElementById('backupReminderLater').addEventListener('click', snoozeBackupReminder);
+refreshBackupReminder();
 
 document.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => switchView(b.dataset.view)));
 // Each launch opens on Tonight. The last tab you used stays available while
