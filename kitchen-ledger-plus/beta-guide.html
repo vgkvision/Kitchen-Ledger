@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kitchen Ledger Plus — beta notes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #3c3630; --dim: #6e655c; --line: #e4ddd4; --bg: #f7f4ef; --card: #fff; --accent: #8a5a2b; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: Inter, sans-serif; font-size: 15px; line-height: 1.45; }
+  .sheet { max-width: 920px; margin: 0 auto; padding: 28px 22px 64px; }
+  h1 { font-family: Fraunces, serif; font-weight: 500; font-size: 2.2rem; margin: 0 0 6px; }
+  .pill { display: inline-block; margin-left: 8px; padding: 2px 8px; border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; font-family: Inter, sans-serif; font-size: 0.72rem; letter-spacing: 0.12em; vertical-align: middle; }
+  .lead { color: var(--dim); margin: 0 0 18px; max-width: 62ch; }
+  .note { background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 8px; padding: 12px 14px; margin: 0 0 22px; }
+  h2 { font-family: Fraunces, serif; font-weight: 500; font-size: 1.35rem; margin: 0 0 6px; }
+  .feature { display: grid; grid-template-columns: 1fr 1.15fr; gap: 16px; align-items: start; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin: 0 0 14px; }
+  .feature p { margin: 0; }
+  .feature ol { margin: 8px 0 0; padding-left: 1.2em; }
+  .feature img { width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--line); }
+  .kicker { font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin: 0 0 4px; }
+  a { color: var(--accent); }
+  @media (max-width: 720px) { .feature { grid-template-columns: 1fr; } }
+  @media print {
+    body { background: #fff; }
+    .sheet { padding: 0; }
+    .feature { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+<main class="sheet">
+  <h1>Kitchen Ledger Plus <span class="pill">BETA</span></h1>
+  <p class="lead">Notes for the family test. The original Kitchen Ledger icon is unchanged. These additions live only in the KL Plus icon. A printable copy is here: <a href="kitchen-ledger-plus-beta.pdf">beta deck (PDF)</a>.</p>
+  <div class="note">
+    Open Plus from the gold <strong>KL Plus</strong> icon. If that icon was already on the phone, close it all the way and open it again so this beta loads. On a computer, use <a href="./index.html">the Plus page</a>.
+    The pictures below use the sample cookbook. After you restore your backup, the same buttons are there with your own dishes.
+  </div>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">1 · Your name</p>
+      <h2>Changes can say who made them</h2>
+      <p>Type a name in the banner under the title and tap Save. A new dish, a planned dinner, and a grocery item will carry that name. Each phone keeps its own name.</p>
+    </div>
+    <img src="guide/01-name-banner.jpg" alt="Name field under the Kitchen Ledger Plus title, filled in as Jeff">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">2 · Want to try</p>
+      <h2>A shelf for ideas</h2>
+      <ol>
+        <li>Open the <strong>Want to try</strong> tab.</li>
+        <li>Save a dish name, a link, and one line about why it might fit.</li>
+        <li>When you want to cook it, pick a category and tap <strong>Add to rotation</strong>.</li>
+      </ol>
+      <p style="margin-top:8px">The full recipe stays on the website. Plus only keeps the name, the link, and your note.</p>
+    </div>
+    <img src="guide/02-want-to-try.jpg" alt="Want to try form and a saved card for Miso Glazed Salmon">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">3 · Added to the rotation</p>
+      <h2>The idea becomes a real dish</h2>
+      <p>After you add it to the rotation, the dish shows who saved the idea. You can fill in the recipe later, the same way as any other dish.</p>
+    </div>
+    <img src="guide/03-added-by.jpg" alt="Rotation card for Miso Glazed Salmon with the line Added by Jeff">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">4 · Repeat a past week</p>
+      <h2>Copy a week you already liked</h2>
+      <ol>
+        <li>Open <strong>Menu Planner</strong> and look at the week you want to fill.</li>
+        <li>Tap <strong>Repeat a past week</strong>.</li>
+        <li>Tap the earlier week. Its dinners land on the same days.</li>
+      </ol>
+      <p style="margin-top:8px">If the week on screen already has dinners, Plus asks before it replaces them.</p>
+    </div>
+    <img src="guide/04-repeat-week.jpg" alt="Repeat a past week panel listing an earlier week and its dinners">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">5 · The copied week</p>
+      <h2>The name stays on the plan</h2>
+      <p>Each copied dinner shows the name of the person who repeated the week.</p>
+    </div>
+    <img src="guide/05-week-copied.jpg" alt="Week view with Sesame Chicken and Chicken Milanese, each marked Jeff">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">6 · Favorites</p>
+      <h2>Fill the open days</h2>
+      <p>Heart a dish in Rotation, or mark that Jeff likes it. Then, on the Menu Planner, tap <strong>Fill open days with favorites</strong>. Days that already have a dinner stay as they are. Plus picks favorites you have not already used that week, starting with the ones made least recently.</p>
+    </div>
+    <img src="guide/06-favorites-week.jpg" alt="A week whose open days were filled with favorite dishes">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">7 · Store mode</p>
+      <h2>A list you can read in the aisle</h2>
+      <ol>
+        <li>Open <strong>Shopping List</strong>.</li>
+        <li>Tap <strong>Store mode</strong>.</li>
+        <li>Type gets larger, checked items hide, and the “pull from your menu” section tucks away.</li>
+        <li>Tap <strong>Leave store mode</strong> when you are home.</li>
+      </ol>
+      <p style="margin-top:8px">A new item can say who added it, such as “Jeff added this.”</p>
+    </div>
+    <img src="guide/07-store-mode.jpg" alt="Shopping list in store mode with large type and a banner that checked items are hidden">
+  </section>
+
+  <section class="feature">
+    <div>
+      <p class="kicker">8 · Photos</p>
+      <h2>Pictures stay on the phone that added them</h2>
+      <p>A photo you add still shows on that phone. For this beta it is not sent up with the family share, so a big picture is less likely to trip the size warning. Everyone still shares the recipes, the menu, the shopping list, and the Want to try shelf. A backup you download on that phone still includes its photos.</p>
+    <p style="margin-top:8px">Have everyone close KL Plus and open it again before the next sync. A phone that already has a photo keeps it. A phone that never had that photo will not receive it during this beta.</p>
+    </div>
+    <img src="guide/08-store-mode-phone.jpg" alt="Store mode on a phone-sized screen, with milk still to buy">
+  </section>
+
+  <section class="note">
+    <h2>Sharing Plus with the family</h2>
+    <p>Inside <strong>KL Plus</strong>, open Share with family and tap <strong>Start sharing</strong>. That makes a new sync code. Send the family the Plus link and that new code. The same API key from jsonbin.io is fine.</p>
+    <p>Keep the original Kitchen Ledger sync code in the original app. Keep the Plus code in Plus.</p>
+    <p style="margin-bottom:0">Help inside Plus also lists these steps. This page is saved with the app, so you can open it again from the Plus folder.</p>
+  </section>
+</main>
+</body>
+</html>
