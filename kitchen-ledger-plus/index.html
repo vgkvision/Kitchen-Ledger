@@ -888,6 +888,7 @@
     margin: 14px auto 0; max-width: 640px; padding: 10px 14px;
     background: var(--tint); border: 1px solid var(--hairline); border-left: 3px solid var(--accent); border-radius: 8px;
   }
+  .member-banner[hidden] { display: none; }
   .member-banner label { font-size: 0.82em; color: var(--ink-dim); }
   .member-banner input {
     font-family: 'Inter', sans-serif; font-size: 0.9em; padding: 8px 12px; border-radius: 6px;
@@ -1553,6 +1554,21 @@ function setMemberName(name) {
     else localStorage.removeItem(MEMBER_NAME_KEY);
   } catch (e) { /* ignore */ }
   return clean;
+}
+function refreshMemberBanner() {
+  const banner = document.getElementById('memberBanner');
+  if (!banner) return;
+  banner.hidden = !!memberName();
+}
+function showMemberBanner() {
+  const banner = document.getElementById('memberBanner');
+  const input = document.getElementById('memberNameInput');
+  if (!banner) return;
+  banner.hidden = false;
+  if (input) {
+    input.value = memberName();
+    input.focus();
+  }
 }
 function loadTryList() {
   try {
@@ -4420,6 +4436,10 @@ function toggleRepeatWeekPanel() {
 }
 
 function copyWeekOntoAnchor(sourceStartIso) {
+  if (!vgkScheduleReady) {
+    loadVgkSchedule().then(() => copyWeekOntoAnchor(sourceStartIso));
+    return;
+  }
   const sourceStart = new Date(sourceStartIso + 'T12:00:00');
   const sourceDates = getWeekDates(sourceStart);
   const targetDates = getWeekDates(menuAnchor);
@@ -4457,6 +4477,10 @@ function copyWeekOntoAnchor(sourceStartIso) {
 }
 
 function fillWeekWithFavorites() {
+  if (!vgkScheduleReady) {
+    loadVgkSchedule().then(() => fillWeekWithFavorites());
+    return;
+  }
   const dates = getWeekDates(menuAnchor);
   const used = new Set();
   dates.forEach(d => dayItems(isoOf(d)).forEach(it => {
@@ -4536,6 +4560,7 @@ function setEasyReading(on) {
 // Menu planner — week / month views + day editor
 // ---------------------------------------------------------------
 let vgkGamesByDate = {};
+let vgkScheduleReady = false;
 function vgkGameOn(iso) { return vgkGamesByDate[iso] || null; }
 function vgkGameLabel(game) {
   if (!game) return '';
@@ -4552,14 +4577,17 @@ function leftoverHtml(iso) {
   return dayHasLeftovers(iso) ? '<div class="leftover-note">Leftovers</div>' : '';
 }
 function loadVgkSchedule() {
-  fetch('vgk-home.json').then(r => {
+  if (loadVgkSchedule.promise) return loadVgkSchedule.promise;
+  loadVgkSchedule.promise = fetch('vgk-home.json').then(r => {
     if (!r.ok) throw new Error('schedule');
     return r.json();
   }).then(data => {
     vgkGamesByDate = {};
     (data.games || []).forEach(g => { if (g && g.date) vgkGamesByDate[g.date] = g; });
+    vgkScheduleReady = true;
     renderMenuView();
-  }).catch(() => {});
+  }).catch(() => { vgkScheduleReady = true; });
+  return loadVgkSchedule.promise;
 }
 
 function renderMenuView() {
@@ -6470,16 +6498,18 @@ function downloadBackup() {
     if (!canShareFile(file)) {
       try { file = new File([json], name, { type: 'text/plain' }); } catch (e) { file = null; }
     }
-    if (canShareFile(file)) {
+    if (file && navigator.share) {
       navigator.share({ files: [file] }).then(() => {
         markBackupSaved();
         showToast('Backup ready to save');
       }).catch(err => {
         if (err && err.name === 'AbortError') return;
-        finishDownload();
+        showToast('If nothing opened, tap the cloud icon, then Download a backup.');
       });
       return;
     }
+    showToast('Tap the cloud icon, then Download a backup.');
+    return;
   }
   finishDownload();
 }
@@ -6728,11 +6758,16 @@ function openHelpModal() {
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
 
       <div class="help-section-title">Appearance</div>
-      <p>Tap the moon icon near Help to switch between light and dark mode. Tap <strong>Aa</strong> for Easy reading. Both choices are remembered on that device.</p>
+      <p>Tap the moon icon near Help to switch between light and dark mode. Tap <strong>Aa</strong> for Easy reading. Both choices are remembered on that device. The name box at the top closes after you save a name. It stays on this phone.</p>
     </div>
     <div class="picker-actions">
+      <button class="picker-action-btn picker-secondary" data-action="edit-name">Change your name</button>
       <button class="picker-action-btn picker-secondary" data-action="close-help">Close</button>
     </div>`;
+  modal.querySelector('[data-action="edit-name"]').addEventListener('click', () => {
+    document.getElementById('helpOverlay').classList.remove('show');
+    showMemberBanner();
+  });
   modal.querySelector('[data-action="close-help"]').addEventListener('click', () => {
     document.getElementById('helpOverlay').classList.remove('show');
   });
@@ -7522,9 +7557,11 @@ document.getElementById('storeModeBtn').addEventListener('click', () => {
 setStoreMode(storeMode);
 const memberNameInput = document.getElementById('memberNameInput');
 if (memberNameInput) memberNameInput.value = memberName();
+refreshMemberBanner();
 document.getElementById('memberNameSave').addEventListener('click', () => {
   const saved = setMemberName(memberNameInput.value);
   memberNameInput.value = saved;
+  refreshMemberBanner();
   showToast(saved ? `Changes will say ${saved}` : 'Name cleared');
 });
 document.getElementById('tryForm').addEventListener('submit', e => {
