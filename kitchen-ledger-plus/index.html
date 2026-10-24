@@ -987,6 +987,84 @@
     .tab-btn { padding: 9px 14px; }
     .member-banner { padding: 10px 12px; }
   }
+
+  /* Surface Duo and other two-screen devices. A vertical hinge means the
+     book is open: title and tabs on the left screen, the work on the right,
+     with the hinge as the gap so a day is never sliced in half. */
+  @media (spanning: single-fold-vertical) {
+    .wrap {
+      display: grid;
+      grid-template-columns: env(fold-left) minmax(0, 1fr);
+      column-gap: env(fold-width);
+      max-width: none; width: 100%; margin: 0; padding: 0 0 48px;
+      box-sizing: border-box;
+    }
+    .hero, .sticky-controls { grid-column: 1; padding-left: 16px; padding-right: 16px; min-width: 0; }
+    #mainContent { grid-column: 2; grid-row: 1 / span 4; padding: 12px 16px 48px; min-width: 0; }
+    .week-grid, .dish-grid, .recipes-list { grid-template-columns: 1fr; }
+    .month-cell-dish { display: none; }
+    .insights-grid { grid-template-columns: repeat(2, 1fr); }
+    .tonight-banner, .backup-reminder, .store-banner { max-width: none; }
+    .picker-overlay {
+      justify-content: flex-start; box-sizing: border-box;
+      padding-left: 12px;
+      padding-right: calc(100vw - env(fold-left) + 12px);
+    }
+    .picker-modal { max-width: calc(env(fold-left) - 24px); }
+    #cookingModeOverlay.picker-overlay {
+      justify-content: flex-end;
+      padding-left: calc(env(fold-left) + env(fold-width) + 12px);
+      padding-right: 12px;
+    }
+    #cookingModeOverlay .picker-modal { max-width: calc(100vw - env(fold-left) - env(fold-width) - 24px); }
+    .toast { left: calc(env(fold-left) / 2); }
+  }
+  @media (horizontal-viewport-segments: 2) {
+    .wrap {
+      display: grid;
+      grid-template-columns: env(viewport-segment-width 0 0) env(viewport-segment-width 1 0);
+      column-gap: calc(env(viewport-segment-left 1 0) - env(viewport-segment-right 0 0));
+      margin-left: env(viewport-segment-left 0 0);
+      max-width: none; width: auto; padding: 0 0 48px;
+      box-sizing: border-box;
+    }
+    .hero, .sticky-controls { grid-column: 1; padding-left: 16px; padding-right: 16px; min-width: 0; }
+    #mainContent { grid-column: 2; grid-row: 1 / span 4; padding: 12px 16px 48px; min-width: 0; }
+    .week-grid, .dish-grid, .recipes-list { grid-template-columns: 1fr; }
+    .month-cell-dish { display: none; }
+    .insights-grid { grid-template-columns: repeat(2, 1fr); }
+    .tonight-banner, .backup-reminder, .store-banner { max-width: none; }
+    .picker-overlay {
+      justify-content: flex-start; box-sizing: border-box;
+      padding-left: calc(env(viewport-segment-left 0 0) + 12px);
+      padding-right: calc(100vw - env(viewport-segment-right 0 0) + 12px);
+    }
+    .picker-modal { max-width: calc(env(viewport-segment-width 0 0) - 24px); }
+    #cookingModeOverlay.picker-overlay {
+      justify-content: flex-end;
+      padding-left: calc(env(viewport-segment-left 1 0) + 12px);
+      padding-right: calc(100vw - env(viewport-segment-right 1 0) + 12px);
+    }
+    #cookingModeOverlay .picker-modal { max-width: calc(env(viewport-segment-width 1 0) - 24px); }
+    .toast { left: calc(env(viewport-segment-left 0 0) + env(viewport-segment-width 0 0) / 2); }
+  }
+  @media (spanning: single-fold-horizontal) {
+    .week-grid, .dish-grid, .recipes-list { grid-template-columns: 1fr; }
+    .month-cell-dish { display: none; }
+    .insights-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (vertical-viewport-segments: 2) {
+    .wrap {
+      width: env(viewport-segment-width 0 0);
+      max-width: none;
+      margin-left: env(viewport-segment-left 0 0);
+      padding-left: 16px; padding-right: 16px;
+      box-sizing: border-box;
+    }
+    .week-grid, .dish-grid, .recipes-list { grid-template-columns: 1fr; }
+    .month-cell-dish { display: none; }
+    .insights-grid { grid-template-columns: repeat(2, 1fr); }
+  }
 </style>
 </head>
 <body class="view-menu">
@@ -6758,7 +6836,7 @@ function openHelpModal() {
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
 
       <div class="help-section-title">Appearance</div>
-      <p>Tap the moon icon near Help to switch between light and dark mode. Tap <strong>Aa</strong> for Easy reading. Both choices are remembered on that device. The name box at the top closes after you save a name. It stays on this phone.</p>
+      <p>Tap the moon icon near Help to switch between light and dark mode. Tap <strong>Aa</strong> for Easy reading. Both choices are remembered on that device. The name box at the top closes after you save a name. It stays on this phone. On a Surface Duo opened like a book, the title and tabs stay on the left screen and the week, recipes, or shopping list stay on the right, so the hinge does not cut through a day.</p>
     </div>
     <div class="picker-actions">
       <button class="picker-action-btn picker-secondary" data-action="edit-name">Change your name</button>
