@@ -2609,42 +2609,124 @@ function shrinkPhotoForReading(file) {
     reader.readAsDataURL(file);
   });
 }
-// A phone picture often includes the counter, a finger, or the facing page.
-// Keep the bright paper so the title is not read off the laptop in the corner.
+// A phone picture often includes the counter, a finger, another page, or a
+// loose sheet beside the book. Keep the recipe page, including the shadowed
+// gutter, so the amounts at the start of each line are still in the picture.
 function cropRecipePageCanvas(canvas) {
   const w = canvas.width, h = canvas.height;
   if (w < 40 || h < 40) return canvas;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const img = ctx.getImageData(0, 0, w, h).data;
   const step = 4;
-  const paper = (x, y) => {
+  const sample = (x, y) => {
     const i = (y * w + x) * 4;
-    const r = img[i], g = img[i + 1], b = img[i + 2];
+    return [img[i], img[i + 1], img[i + 2]];
+  };
+  const isPaper = (x, y) => {
+    const [r, g, b] = sample(x, y);
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     return min > 175 && (max - min) < 42;
   };
-  const rowPaper = (y) => {
-    let n = 0, p = 0;
-    for (let x = 0; x < w; x += step) { n++; if (paper(x, y)) p++; }
-    return n ? p / n : 0;
+  const isDark = (x, y) => Math.max.apply(null, sample(x, y)) < 145;
+  const longestRun = (y) => {
+    let best = 0, bestS = 0, cur = 0, curS = 0;
+    for (let x = 0; x < w; x += step) {
+      if (isPaper(x, y)) {
+        if (!cur) curS = x;
+        cur += step;
+      } else if (cur) {
+        if (cur > best) { best = cur; bestS = curS; }
+        cur = 0;
+      }
+    }
+    if (cur > best) { best = cur; bestS = curS; }
+    return { y, width: best, start: bestS, end: bestS + best };
   };
-  let top = -1, bot = -1;
-  for (let y = 0; y < h; y += step) if (rowPaper(y) > 0.28) { top = y; break; }
-  for (let y = h - 1; y >= 0; y -= step) if (rowPaper(y) > 0.22) { bot = y; break; }
-  if (top < 0 || bot - top < h * 0.35) return canvas;
-  const colPaper = (x) => {
-    let n = 0, p = 0;
-    for (let y = top; y <= bot; y += step) { n++; if (paper(x, y)) p++; }
-    return n ? p / n : 0;
+  const spine = [];
+  for (let y = 0; y < h; y += step) {
+    const run = longestRun(y);
+    if (run.width >= w * 0.55) spine.push(run);
+  }
+  let top, bot, left, right;
+  if (spine.length >= 4) {
+    const clusters = [];
+    let group = [spine[0]];
+    for (let i = 1; i < spine.length; i++) {
+      if (spine[i].y - group[group.length - 1].y > h * 0.15) {
+        clusters.push(group);
+        group = [];
+      }
+      group.push(spine[i]);
+    }
+    clusters.push(group);
+    clusters.sort((a, b) => b.length - a.length);
+    const cluster = clusters[0];
+    top = cluster[0].y;
+    const header = cluster.filter(r => r.y <= top + h * 0.14);
+    const sampleRows = header.length >= 3 ? header : cluster.slice(0, 8);
+    left = Math.min.apply(null, sampleRows.map(r => r.start));
+    right = Math.max.apply(null, sampleRows.map(r => r.end));
+    bot = top;
+    for (let y = h - 1; y > top; y -= step) {
+      let n = 0, p = 0;
+      const x0 = Math.max(0, left), x1 = Math.min(w, right);
+      for (let x = x0; x < x1; x += step) { n++; if (isPaper(x, y)) p++; }
+      if (n && p / n > 0.18) { bot = y; break; }
+    }
+  } else {
+    const rowPaper = (y) => {
+      let n = 0, p = 0;
+      for (let x = 0; x < w; x += step) { n++; if (isPaper(x, y)) p++; }
+      return n ? p / n : 0;
+    };
+    top = -1; bot = -1;
+    for (let y = 0; y < h; y += step) if (rowPaper(y) > 0.28) { top = y; break; }
+    for (let y = h - 1; y >= 0; y -= step) if (rowPaper(y) > 0.22) { bot = y; break; }
+    if (top < 0 || bot - top < h * 0.35) return canvas;
+    const colPaper = (x) => {
+      let n = 0, p = 0;
+      for (let y = top; y <= bot; y += step) { n++; if (isPaper(x, y)) p++; }
+      return n ? p / n : 0;
+    };
+    left = -1; right = -1;
+    for (let x = 0; x < w; x += step) if (colPaper(x) > 0.35) { left = x; break; }
+    for (let x = w - 1; x >= 0; x -= step) if (colPaper(x) > 0.35) { right = x; break; }
+    if (left < 0 || right - left < w * 0.35) return canvas;
+  }
+  const colStats = (x) => {
+    let n = 0, d = 0, p = 0;
+    const y0 = Math.max(0, top), y1 = Math.min(h - 1, bot);
+    for (let y = y0; y <= y1; y += step) {
+      n++;
+      if (isDark(x, y)) d++;
+      if (isPaper(x, y)) p++;
+    }
+    return { dark: n ? d / n : 1, paper: n ? p / n : 0 };
   };
-  let left = -1, right = -1;
-  for (let x = 0; x < w; x += step) if (colPaper(x) > 0.35) { left = x; break; }
-  for (let x = w - 1; x >= 0; x -= step) if (colPaper(x) > 0.35) { right = x; break; }
-  if (left < 0 || right - left < w * 0.35) return canvas;
-  const x = Math.max(0, left - 8);
-  const y = Math.max(0, top - 8);
-  const cw = Math.min(w - x, right - left + 24);
-  const ch = Math.min(h - y, bot - top + 24);
+  // The amounts sit in the gutter shadow, just outside the bright paper.
+  // Step left across that shadow and stop at a photo beside the page.
+  const leftLimit = Math.max(0, left - Math.round(w * 0.12));
+  let guard = 0;
+  for (let x = left; x >= leftLimit; x -= step) {
+    if (colStats(x).dark > 0.55) {
+      guard++;
+      if (guard >= 2) { left = Math.min(left, x + step * 3); break; }
+    } else { guard = 0; left = x; }
+  }
+  const rightLimit = Math.min(w - 1, right + Math.round(w * 0.18));
+  guard = 0;
+  for (let x = right; x <= rightLimit; x += step) {
+    const stats = colStats(x);
+    if (stats.paper < 0.25 && stats.dark > 0.4) {
+      guard++;
+      if (guard >= 2) { right = Math.max(right, x - step * 3); break; }
+    } else { guard = 0; right = x; }
+  }
+  const x = Math.max(0, left - 4);
+  const y = Math.max(0, top - 6);
+  const cw = Math.min(w - x, right - x + 4);
+  const ch = Math.min(h - y, bot - y + 8);
+  if (cw < w * 0.35 || ch < h * 0.35) return canvas;
   if (cw > w * 0.97 && ch > h * 0.97) return canvas;
   const out = document.createElement('canvas');
   out.width = Math.max(1, cw);
@@ -3303,7 +3385,7 @@ function tidyTitle(name) {
     return t;
   }
   const lower = t.toLowerCase();
-  return lower.replace(/\b([a-z])/g, (m, c) => c.toUpperCase());
+  return lower.replace(/(^|[^A-Za-z'])([a-z])/g, (m, pre, c) => pre + c.toUpperCase());
 }
 function sentenceCase(name) {
   const lower = String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -3322,13 +3404,42 @@ function isJunkPhotoLine(line) {
 }
 function isPageFooter(line) {
   if (line.length > 40) return false;
-  return /^\d{1,4}\s*[•·]/.test(line) || /^\d{1,4}\s+[-–]\s+\S+/.test(line);
+  if (/^\d{1,4}\s*[•·]/.test(line) || /^\d{1,4}\s+[-–]\s+\S+/.test(line)) return true;
+  return /^[A-Za-z][A-Za-z\s]{1,24}[•·]\s*\d{1,4}$/.test(line);
+}
+function isStrayWord(line) {
+  if (!/^[a-z]{3,14}$/.test(line)) return false;
+  if (isBareIngredient(line)) return false;
+  return !/^(divided|chopped|diced|sliced|minced|grated|halved|peeled|seeded|toasted|melted|softened|packed|sifted|optional|cubed|drained|rinsed|trimmed|crushed|ground|beaten|cooled|warmed|chilled|thawed)$/.test(line);
 }
 function stripNonLatin(text) {
   return String(text || '').replace(/[^\s\dA-Za-z\u00C0-\u024F\u1E00-\u1EFF\u00BC\u00BD\u00BE\u2150-\u215E.,;:'’"“”()\[\]\-\/&%°+#•·–—]/g, '');
 }
 function tidyPhotoLine(line) {
   return stripNonLatin(line).replace(/\b[Zz]\s*-\s*inch\b/g, '2-inch').replace(/\s+/g, ' ').trim();
+}
+function tidyServings(value) {
+  let v = String(value || '').replace(/\.$/, '').replace(/\s+/g, ' ').trim();
+  if (v && v === v.toUpperCase() && /[A-Za-z]/.test(v)) v = v.toLowerCase();
+  return v;
+}
+// "4 FOR LUNCH / 6 AS A SIDE DISH" stays with the yield. "I love..." does not.
+function splitYield(after) {
+  const restIn = String(after || '').replace(/\s+/g, ' ').trim();
+  const num = restIn.match(/^(\d+(?:\s*(?:to|-)\s*\d+)?)([\s\S]*)$/i);
+  if (!num) return { servings: tidyServings(restIn), tail: '' };
+  let yieldPart = num[1];
+  let rest = num[2] || '';
+  while (rest) {
+    const tok = rest.match(/^(\s+)(\/|\d+|[A-Z]+)(?=\s|$)/);
+    if (!tok) break;
+    const afterTok = rest.slice(tok[0].length);
+    const next = afterTok.match(/^\s+(\S+)/);
+    if (/[A-Za-z]/.test(tok[2]) && tok[2].length === 1 && next && /^[a-z]/.test(next[1])) break;
+    yieldPart += tok[0];
+    rest = afterTok;
+  }
+  return { servings: tidyServings(yieldPart), tail: rest.trim() };
 }
 function peelPhotoTitle(line) {
   let rest = line.replace(/^[A-Za-z]{1,6}\s+(?=(?:prep ahead|make ahead|do ahead|serves|servings)\b)/i, '');
@@ -3337,11 +3448,12 @@ function peelPhotoTitle(line) {
   let servings = '';
   let title = rest;
   let tail = '';
-  const embedded = rest.match(/\b(?:serves|servings|yield)\s*:?\s*(\d+(?:\s+to\s+\d+)?)\b/i);
+  const embedded = rest.match(/\b(?:serves|servings|yield)\s*:?\s*/i);
   if (embedded) {
-    servings = embedded[1].trim();
     title = rest.slice(0, embedded.index).trim();
-    tail = rest.slice(embedded.index + embedded[0].length).trim();
+    const split = splitYield(rest.slice(embedded.index + embedded[0].length));
+    servings = split.servings;
+    tail = split.tail;
   }
   return { title, servings, banner, tail };
 }
@@ -3356,10 +3468,11 @@ function cleanPhotoNotes(notes, name, servings) {
       const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       text = text.replace(new RegExp('^' + esc + '[.\\s]*', 'i'), '');
     }
-    text = text.replace(/^(?:serves|servings|yield)\s*:?\s*\d+(?:\s+to\s+\d+)?\s*/i, '');
+    const servesLead = text.match(/^(?:serves|servings|yield)\s*:?\s*/i);
+    if (servesLead) text = splitYield(text.slice(servesLead[0].length)).tail;
     if (servings) {
       const esc = String(servings).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      text = text.replace(new RegExp('^(?:serves|servings|yield)\\s*:?\\s*' + esc + '\\s*', 'i'), '');
+      text = text.replace(new RegExp('^' + esc + '\\s*', 'i'), '');
     }
     text = text.replace(/([A-Za-z])\s+\/\s+([a-z])/g, '$1 I $2');
     return text.replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim();
@@ -3390,8 +3503,8 @@ function isServesLine(line) {
   return /^(serves|servings|yield)\b/i.test(line);
 }
 function servesValue(line) {
-  const m = line.match(/^(?:serves|servings|yield)\s*:?\s*(.+)$/i);
-  return m ? m[1].replace(/\.$/, '').trim() : '';
+  const m = line.match(/^(?:serves|servings|yield)\s*:?\s*(.*)$/i);
+  return m ? splitYield(m[1]).servings : '';
 }
 function isQuantityStart(line) {
   if (/^\d+\s*-\s*inch\b/i.test(line)) return false;
@@ -3451,7 +3564,7 @@ function parseCookbookPage(text) {
   const lines = [];
   for (const line of raw) {
     if (isPageFooter(line)) { if (!source) source = footerSource(line); continue; }
-    if (isJunkPhotoLine(line)) continue;
+    if (isJunkPhotoLine(line) || isStrayWord(line)) continue;
     lines.push(line);
   }
   const result = { name: '', source, prepTime: '', servings: '', cuisine: '', ingredients: [], instructions: [], notes: '' };
@@ -3462,7 +3575,9 @@ function parseCookbookPage(text) {
     if (isJunkPhotoLine(line)) { idx++; continue; }
     if (isBanner(line)) { banners.push(line); idx++; continue; }
     if (isServesLine(line)) {
-      if (!result.servings) result.servings = servesValue(line);
+      const split = splitYield(line.replace(/^(?:serves|servings|yield)\s*:?\s*/i, ''));
+      if (!result.servings && split.servings) result.servings = split.servings;
+      if (split.tail) lines.splice(idx + 1, 0, split.tail);
       idx++;
       continue;
     }
