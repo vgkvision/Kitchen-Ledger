@@ -3324,8 +3324,49 @@ function isPageFooter(line) {
   if (line.length > 40) return false;
   return /^\d{1,4}\s*[•·]/.test(line) || /^\d{1,4}\s+[-–]\s+\S+/.test(line);
 }
+function stripNonLatin(text) {
+  return String(text || '').replace(/[^\s\dA-Za-z\u00C0-\u024F\u1E00-\u1EFF\u00BC\u00BD\u00BE\u2150-\u215E.,;:'’"“”()\[\]\-\/&%°+#•·–—]/g, '');
+}
 function tidyPhotoLine(line) {
-  return line.replace(/\b[Zz]\s*-\s*inch\b/g, '2-inch');
+  return stripNonLatin(line).replace(/\b[Zz]\s*-\s*inch\b/g, '2-inch').replace(/\s+/g, ' ').trim();
+}
+function peelPhotoTitle(line) {
+  let rest = line.replace(/^[A-Za-z]{1,6}\s+(?=(?:prep ahead|make ahead|do ahead|serves|servings)\b)/i, '');
+  const banner = /(?:prep ahead|make ahead|do ahead|advance prep)\b/i.test(rest);
+  rest = rest.replace(/^(?:prep ahead|make ahead|do ahead|weeknight|quick|advance prep)\b[:\s-]*/i, '').trim();
+  let servings = '';
+  let title = rest;
+  let tail = '';
+  const embedded = rest.match(/\b(?:serves|servings|yield)\s*:?\s*(\d+(?:\s+to\s+\d+)?)\b/i);
+  if (embedded) {
+    servings = embedded[1].trim();
+    title = rest.slice(0, embedded.index).trim();
+    tail = rest.slice(embedded.index + embedded[0].length).trim();
+  }
+  return { title, servings, banner, tail };
+}
+function cleanPhotoNotes(notes, name, servings) {
+  let sawBanner = false;
+  const parts = String(notes || '').split(/\n{2,}/).map(part => {
+    let text = stripNonLatin(part).replace(/\s+/g, ' ').trim();
+    text = text.replace(/^[A-Za-z]{1,6}\s+(?=(?:prep ahead|make ahead|do ahead|serves|servings)\b)/i, '');
+    if (/^(?:prep ahead|make ahead|do ahead|advance prep)\b/i.test(text)) sawBanner = true;
+    text = text.replace(/^(?:prep ahead|make ahead|do ahead|weeknight|quick|advance prep)[.\s]*/i, '');
+    if (name) {
+      const esc = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      text = text.replace(new RegExp('^' + esc + '[.\\s]*', 'i'), '');
+    }
+    text = text.replace(/^(?:serves|servings|yield)\s*:?\s*\d+(?:\s+to\s+\d+)?\s*/i, '');
+    if (servings) {
+      const esc = String(servings).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      text = text.replace(new RegExp('^(?:serves|servings|yield)\\s*:?\\s*' + esc + '\\s*', 'i'), '');
+    }
+    text = text.replace(/([A-Za-z])\s+\/\s+([a-z])/g, '$1 I $2');
+    return text.replace(/^[.\s]+/, '').replace(/\s+/g, ' ').trim();
+  }).filter(Boolean);
+  const head = [];
+  if (sawBanner && !/^prep ahead\.?$/i.test(parts[0] || '')) head.push('Prep ahead.');
+  return head.concat(parts).join('\n\n');
 }
 function footerSource(line) {
   const m = line.match(/^(?:\d{1,4}\s*[•·]\s+|\d{1,4}\s+[-–]\s+)(.+)$/);
@@ -3425,17 +3466,16 @@ function parseCookbookPage(text) {
       idx++;
       continue;
     }
-    if (!result.name && looksLikeTitle(line)) {
-      let title = line;
-      const embedded = title.match(/\b(?:serves|servings|yield)\s*:?\s*(\d[\w\s-]*)/i);
-      if (embedded) {
-        if (!result.servings) result.servings = embedded[1].trim();
-        title = title.replace(embedded[0], ' ').replace(/\s+/g, ' ').trim();
+    if (!result.name) {
+      const peeled = peelPhotoTitle(line);
+      if (peeled.banner && !banners.some(b => /prep ahead/i.test(b))) banners.push('Prep ahead');
+      if (peeled.servings && !result.servings) result.servings = peeled.servings;
+      if (peeled.title && looksLikeTitle(peeled.title)) {
+        result.name = tidyTitle(peeled.title);
+        if (peeled.tail) lines.splice(idx + 1, 0, peeled.tail);
+        idx++;
+        continue;
       }
-      title = title.replace(/^(?:prep ahead|make ahead|do ahead|weeknight|quick|advance prep)\b[:\s-]*/i, '').trim();
-      if (title) result.name = tidyTitle(title);
-      idx++;
-      continue;
     }
     break;
   }
@@ -3481,7 +3521,7 @@ function parseCookbookPage(text) {
   if (banners.length) noteParts.push(banners.map(b => sentenceCase(b)).join('. ') + '.');
   if (intro.length) noteParts.push(groupParagraphs(intro).join(' '));
   if (noteLines.length) noteParts.push(groupParagraphs(noteLines).join('\n\n'));
-  result.notes = noteParts.filter(Boolean).join('\n\n');
+  result.notes = cleanPhotoNotes(noteParts.filter(Boolean).join('\n\n'), result.name, result.servings);
   return result;
 }
 function parsePhotoRecipeText(text) {
@@ -3592,6 +3632,7 @@ async function readRecipePhoto(blob) {
   }
 }
 function showPhotoRecipeReview(parsed) {
+  updateCookbookSuggestions();
   const modal = document.getElementById('pasteRecipeModal');
   const category = guessPhotoCategory(parsed.name, parsed.ingredients);
   modal.classList.add('photo-read-modal');
@@ -3606,7 +3647,7 @@ function showPhotoRecipeReview(parsed) {
     <input class="sync-input" id="photoRecipeName" value="${escapeHtml(parsed.name || '')}">
     <div class="recipe-edit-row">
       <input class="sync-input" id="photoRecipeServings" placeholder="Servings" value="${escapeHtml(parsed.servings || '')}">
-      <input class="sync-input" id="photoRecipeSource" placeholder="Cookbook" value="${escapeHtml(parsed.source || '')}">
+      <input class="sync-input" id="photoRecipeSource" list="cookbookSuggestions" autocomplete="off" placeholder="Start typing a cookbook" value="${escapeHtml(parsed.source || '')}">
     </div>
     <div class="recipe-section-label">Ingredients</div>
     <textarea class="sync-input" id="photoRecipeIngredients" rows="8" style="min-height:140px;">${escapeHtml((parsed.ingredients || []).join('\n'))}</textarea>
