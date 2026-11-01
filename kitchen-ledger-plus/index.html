@@ -3911,7 +3911,11 @@ function cloudMeta() {
 }
 function menuHasPlans(candidate) {
   if (!candidate || typeof candidate !== 'object') return false;
-  return Object.keys(candidate).some(key => Array.isArray(candidate[key]) && candidate[key].length);
+  return Object.keys(candidate).some(key => {
+    const day = candidate[key];
+    if (Array.isArray(day)) return day.length > 0;
+    return !!(day && typeof day === 'object');
+  });
 }
 
 async function syncPush() {
@@ -3924,13 +3928,50 @@ async function syncPush() {
     manifest.groupBins = manifest.groupBins || {};
     let manifestChanged = false;
 
+    // Save the week before the recipes. A recipe group that is too big
+    // must not block the menu, and an empty week must not replace one
+    // that is already saved.
+    let metaPayload = cloudMeta();
+    let skipMetaWrite = false;
+    if (!menuHasPlans(metaPayload.menu) && manifest.metaBinId) {
+      let existingMeta = null;
+      try { existingMeta = await jsonbinFetch(apiKey, manifest.metaBinId); }
+      catch (e) { existingMeta = null; }
+      if (existingMeta && menuHasPlans(existingMeta.menu)) {
+        metaPayload = Object.assign({}, metaPayload, { menu: existingMeta.menu });
+        menu = existingMeta.menu;
+        migrateMenuFormat(menu);
+        try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
+        renderMenuView();
+        renderShoppingView();
+      } else if (!existingMeta) {
+        skipMetaWrite = true;
+      }
+    }
+    if (!skipMetaWrite) {
+      const metaKB = payloadSizeKB(metaPayload);
+      if (metaKB != null && metaKB > JSONBIN_SIZE_LIMIT_KB) {
+        lastSyncPushError = `Sync failed — your menu and shopping list together are ${metaKB} KB, over the ${JSONBIN_SIZE_LIMIT_KB} KB free-tier limit per item.`;
+        indicator.textContent = lastSyncPushError;
+        return;
+      }
+      if (manifest.metaBinId) {
+        await jsonbinUpdate(apiKey, manifest.metaBinId, metaPayload);
+      } else {
+        manifest.metaBinId = await jsonbinCreate(apiKey, metaPayload);
+        manifestChanged = true;
+      }
+    }
+
+    let skippedGroup = false;
     for (const groupId of Object.keys(CATEGORY_GROUPS)) {
       const groupSections = sectionsInGroup(groupId);
       const kb = payloadSizeKB(groupSections);
       if (kb != null && kb > JSONBIN_SIZE_LIMIT_KB) {
-        lastSyncPushError = `Sync failed — one part of your rotation is ${kb} KB, over the ${JSONBIN_SIZE_LIMIT_KB} KB free-tier limit per item. Try trimming photos or long notes.`;
+        skippedGroup = true;
+        lastSyncPushError = `One part of your rotation is ${kb} KB, over the ${JSONBIN_SIZE_LIMIT_KB} KB limit, so that part was left as it was. The week can still sync.`;
         indicator.textContent = lastSyncPushError;
-        return;
+        continue;
       }
       const existingBinId = manifest.groupBins[groupId];
       if (existingBinId) {
@@ -3943,39 +3984,8 @@ async function syncPush() {
       await sleep(120); // small pacing between requests — avoids tripping a rate limit
     }
 
-    let metaPayload = cloudMeta();
-    // An empty week on one screen must not erase dinners that are already
-    // saved for the family. Keep the saved week, and show it here.
-    if (!menuHasPlans(metaPayload.menu) && manifest.metaBinId) {
-      let existingMeta = null;
-      try { existingMeta = await jsonbinFetch(apiKey, manifest.metaBinId); }
-      catch (e) { existingMeta = null; }
-      if (existingMeta && menuHasPlans(existingMeta.menu)) {
-        metaPayload = Object.assign({}, metaPayload, { menu: existingMeta.menu });
-        menu = existingMeta.menu;
-        try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
-        renderMenuView();
-        renderShoppingView();
-      } else if (!existingMeta) {
-        lastSyncPushError = 'Could not confirm the saved week, so this device did not replace it.';
-        indicator.textContent = lastSyncPushError;
-        return;
-      }
-    }
-    const metaKB = payloadSizeKB(metaPayload);
-    if (metaKB != null && metaKB > JSONBIN_SIZE_LIMIT_KB) {
-      lastSyncPushError = `Sync failed — your menu and shopping list together are ${metaKB} KB, over the ${JSONBIN_SIZE_LIMIT_KB} KB free-tier limit per item.`;
-      indicator.textContent = lastSyncPushError;
-      return;
-    }
-    if (manifest.metaBinId) {
-      await jsonbinUpdate(apiKey, manifest.metaBinId, metaPayload);
-    } else {
-      manifest.metaBinId = await jsonbinCreate(apiKey, metaPayload);
-      manifestChanged = true;
-    }
-
     if (manifestChanged) await jsonbinUpdate(apiKey, manifestBinId, manifest);
+    if (skippedGroup || skipMetaWrite) return;
 
     lastSyncPushError = null;
     clearPushPending();
@@ -4145,6 +4155,7 @@ function renderSyncModal(status, activeTab) {
       <div class="sync-status">Sync code:</div>
       <div class="sync-code-box"><span class="sync-code">${escapeHtml(binId)}</span><button class="sync-copy-btn" data-action="copy-code">Copy</button></div>
       ${lastSyncedLabel() ? `<div class="sync-status">${escapeHtml(lastSyncedLabel())}</div>` : ''}
+      <div class="sync-step">If this screen’s week is empty, Sync now brings in the week from the phone. It will not erase dinners that are already saved.</div>
       ${syncSizeIndicatorHtml()}
       ${status ? `<div class="sync-status">${escapeHtml(status)}</div>` : ''}
       <div class="sync-step" style="margin-top:18px;">Keep a local copy of everything, independent of family sharing — useful if you're ever switching devices or just want peace of mind.</div>
@@ -4222,9 +4233,16 @@ function wireSyncModal() {
   }));
   overlay.querySelectorAll('[data-action="sync-now"]').forEach(b => b.addEventListener('click', async () => {
     renderSyncModal('Syncing…');
-    // Same safety as on launch: if there's a local change that hasn't been
-    // confirmed pushed yet, send it up FIRST — pulling before that would
-    // silently overwrite it with whatever's currently in the cloud.
+    // An empty week must download the family's dinners, not upload the
+    // blank week over them. A screen that already has dinners sends those
+    // up first so a pull cannot wipe them.
+    if (!menuHasPlans(menu)) {
+      const cloud = await syncPull();
+      if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
+      if (menuHasPlans(menu)) clearPushPending();
+      renderSyncModal(menuHasPlans(menu) ? 'Up to date.' : (lastSyncPullError || 'The week on the phone has not arrived yet. Leave the phone open on Plus, then try Sync now again.'));
+      return;
+    }
     if (hasPendingPush()) {
       await syncPush();
       if (hasPendingPush()) {
@@ -7571,6 +7589,12 @@ updateSyncBtn();
 // and only pulls if that's confirmed safe, same protection as everywhere else.
 async function safeSyncCheck() {
   if (!isSyncConnected()) return;
+  if (!menuHasPlans(menu)) {
+    const cloud = await syncPull();
+    if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
+    if (menuHasPlans(menu)) clearPushPending();
+    return;
+  }
   if (hasPendingPush() || menuHasPlans(menu)) {
     await syncPush();
     if (hasPendingPush()) {
