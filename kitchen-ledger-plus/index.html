@@ -6656,8 +6656,11 @@ function restoreFromBackupFile(file) {
       showToast("That doesn't look like a Kitchen Ledger backup file"); return;
     }
     const dateNote = data.exportedAt ? ` from ${new Date(data.exportedAt).toLocaleDateString()}` : '';
+    const emptyWeekWarning = !menuHasPlans(data.menu) && menuHasPlans(menu)
+      ? ' This file has no dinners planned. Restoring it will erase the week on this screen.'
+      : '';
     showConfirmModal(
-      `Restore this backup${dateNote}? It replaces everything currently in the app — recipes, menu, shopping list, and cookbooks. This can't be undone.`,
+      `Restore this backup${dateNote}? It replaces everything currently in the app — recipes, menu, shopping list, and cookbooks.${emptyWeekWarning}`,
       () => {
         applyExternalData(data);
         markPushPending();
