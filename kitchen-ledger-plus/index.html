@@ -3197,22 +3197,56 @@ function openNewRecipeModal() {
 }
 function closeNewRecipeModal() { document.getElementById('newRecipeOverlay').classList.remove('show'); }
 
+function linesFromPaste(text) {
+  return String(text || '').split('\n').map(line => stripLeadingBullet(line.trim())).filter(Boolean);
+}
 function openPhotoRecipeGuide() {
   const modal = document.getElementById('pasteRecipeModal');
   modal.innerHTML = `
     <div class="picker-eyebrow">Add from a photo</div>
-    <p style="font-size:0.95em;color:var(--ink-dim);line-height:1.5;margin:0 0 14px;text-align:left;">The iPhone reads the page. Plus uses the words you copy.</p>
+    <p style="font-size:0.95em;color:var(--ink-dim);line-height:1.5;margin:0 0 12px;text-align:left;">Copy the page in three pieces. Plus does not need the words Ingredients or Instructions.</p>
     <ol class="photo-steps">
-      <li><strong>Take the photo</strong> in the Camera app. You can leave Plus for a moment.</li>
-      <li><strong>Copy the words.</strong> Open the photo, tap the Live Text icon (small lines inside a box), then select the recipe and copy it.</li>
-      <li><strong>Come back here</strong> and tap “I copied the words.” Paste on the next screen. Put the dish name on the first line. If the page has two lists, leave the words Ingredients and Instructions above them.</li>
+      <li>Open the photo. Tap the Live Text icon, the small lines inside a box.</li>
+      <li>Select only the dish name and copy it into <strong>Dish name</strong>.</li>
+      <li>Select only the ingredient list, usually the left column, and paste it below.</li>
+      <li>Select only the steps, usually the right column, and paste those in <strong>Steps</strong>.</li>
     </ol>
+    <div class="recipe-section-label" style="margin-top:0;">Category</div>
+    <select class="day-editor-select" id="photoRecipeCategory">${sections.map(s => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('')}</select>
+    <div class="recipe-section-label">Dish name</div>
+    <input class="sync-input" id="photoRecipeName" placeholder="Sesame ginger chicken bowl">
+    <div class="recipe-section-label">Ingredients</div>
+    <textarea class="sync-input" id="photoRecipeIngredients" rows="6" placeholder="One ingredient on each line" style="min-height:120px;"></textarea>
+    <div class="recipe-section-label">Steps</div>
+    <textarea class="sync-input" id="photoRecipeSteps" rows="6" placeholder="One step on each line, or one paragraph per step" style="min-height:120px;"></textarea>
     <div class="picker-actions">
-      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="photo-copied">I copied the words</button>
-      <button class="picker-action-btn picker-secondary" data-action="close-photo-recipe">Close</button>
+      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="save-photo-recipe">Save and review</button>
+      <button class="picker-action-btn picker-secondary" data-action="close-photo-recipe">Cancel</button>
     </div>`;
   modal.querySelector('[data-action="close-photo-recipe"]').addEventListener('click', closePasteRecipeModal);
-  modal.querySelector('[data-action="photo-copied"]').addEventListener('click', openPasteRecipeModal);
+  modal.querySelector('[data-action="save-photo-recipe"]').addEventListener('click', () => {
+    const sectionId = document.getElementById('photoRecipeCategory').value;
+    let name = document.getElementById('photoRecipeName').value.trim();
+    const ingredients = linesFromPaste(document.getElementById('photoRecipeIngredients').value);
+    const instructions = linesFromPaste(document.getElementById('photoRecipeSteps').value);
+    if (!name) { showToast('Paste the dish name first'); return; }
+    if (!ingredients.length && !instructions.length) { showToast('Paste the ingredient list or the steps'); return; }
+    const sec = sections.find(s => s.id === sectionId);
+    if (!sec) return;
+    if (sec.dishes.some(d => d.name.toLowerCase() === name.toLowerCase())) {
+      let n = 2;
+      while (sec.dishes.some(d => d.name.toLowerCase() === `${name} (${n})`.toLowerCase())) n++;
+      name = `${name} (${n})`;
+    }
+    const dish = { name };
+    if (ingredients.length) dish.ingredients = ingredients;
+    if (instructions.length) dish.instructions = instructions;
+    sec.dishes.push(dish);
+    saveData();
+    render();
+    closePasteRecipeModal();
+    openRecipeModal(sectionId, name, true);
+  });
   document.getElementById('pasteRecipeOverlay').classList.add('show');
 }
 
@@ -6904,7 +6938,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes walks through copying a photographed recipe with the iPhone’s Live Text, then pasting it in. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you copy the dish name, the ingredient list, and the steps separately with Live Text. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
