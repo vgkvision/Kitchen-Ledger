@@ -4137,6 +4137,7 @@ function renderSyncModal(status, activeTab) {
     modal.innerHTML = `
       <div class="picker-eyebrow">Share with family</div>
       <div class="sync-step">Uses a free <strong>JSONBin.io</strong> account you control. Sign up there, copy your "X-Master-Key" from the API Keys page, and paste it below. Anyone with this key and the sync code can see and edit your rotation, recipes, and menu.</div>
+      <div class="sync-step">On a Mac, the Dock app and Safari each keep their own copy. Connecting one does not connect the other. Use <strong>Join a family member's</strong> with the same key and the same sync code in each one.</div>
       <input class="sync-input" id="syncApiKeyInput" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste your JSONBin.io X-Master-Key" value="${escapeHtml(apiKey)}">
       <div class="sync-tabs">
         <button class="sync-tab ${tab==='create'?'active':''}" data-action="sync-tab-create">Start sharing</button>
@@ -4238,12 +4239,13 @@ function wireSyncModal() {
     const connectPlusCode = window.confirm('Connect Plus to this sync code? Only continue if this code was created inside Plus. The original Kitchen Ledger sync code will let Plus write into the live family cookbook.');
     if (!connectPlusCode) { renderSyncModal(null, 'join'); return; }
     renderSyncModal('Connecting…', 'join');
+    // A Mac Dock app, or any screen that was never part of the share, must
+    // download the family cookbook. Pushing first would replace the phone
+    // and Safari with this screen's private copy.
+    const alreadyConnected = isSyncConnected();
     localStorage.setItem(SYNC_KEY_STORAGE, apiKey);
     localStorage.setItem(SYNC_BIN_STORAGE, binId);
-    // Same safety as elsewhere: if this device has a local change that was
-    // never confirmed pushed, send it up before pulling anything — otherwise
-    // joining would silently overwrite it with whatever's already in the bin.
-    if (hasPendingPush()) {
+    if (alreadyConnected && hasPendingPush()) {
       await syncPush();
       if (hasPendingPush()) {
         localStorage.removeItem(SYNC_KEY_STORAGE);
@@ -4255,6 +4257,7 @@ function wireSyncModal() {
     const cloud = await syncPull();
     if (cloud) {
       applyExternalData(cloud);
+      clearPushPending();
       updateSyncBtn();
       renderSyncModal();
       showToast('Sync connected');
