@@ -921,9 +921,22 @@
   .try-card p { margin: 6px 0 0; color: var(--ink); font-size: 0.9em; }
   .try-card-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
   .try-card-actions .control-select { max-width: 220px; }
-  .photo-steps { margin: 0 0 8px; padding-left: 1.2em; text-align: left; }
-  .photo-steps li { margin: 0 0 10px; line-height: 1.45; }
-  .photo-steps strong { font-weight: 600; }
+  .photo-file-input {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; opacity: 0;
+  }
+  .picker-modal.photo-read-modal {
+    text-align: left; display: flex; flex-direction: column;
+    overflow: hidden; padding-bottom: 16px;
+  }
+  .photo-read-body { overflow-y: auto; min-height: 0; }
+  .photo-read-preview {
+    display: block; width: 100%; max-height: 160px; object-fit: cover; object-position: top;
+    border-radius: 6px; margin: 0 0 12px; background: var(--tint);
+  }
+  .photo-read-note { font-size: 0.9em; color: var(--ink-dim); line-height: 1.45; margin: 0 0 12px; }
+  .photo-read-modal .picker-actions { flex-shrink: 0; margin: 12px 0 0; }
+  .photo-read-modal .recipe-edit-row { margin-top: 8px; }
   .fridge-sheet { text-align: left; background: #fff; color: #292420; }
   .fridge-sheet-title {
     font-family: 'Fraunces', Georgia, serif; font-weight: 560; font-size: 34px;
@@ -1253,6 +1266,7 @@
       </select>
       <button type="button" class="picker-action-btn picker-secondary" id="newRecipeBtn">+ Add a new recipe</button>
       <button type="button" class="picker-action-btn picker-secondary" id="photoRecipeBtn">Add from a photo</button>
+      <input type="file" id="photoRecipeFile" class="photo-file-input" accept="image/*" aria-label="Choose a photo of a recipe">
       <button type="button" class="picker-action-btn picker-secondary" id="pasteRecipeBtn">Paste a recipe</button>
       <button type="button" class="picker-action-btn picker-secondary" id="printCookbookBtn"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;flex-shrink:0;" aria-hidden="true"><path d="M5.5 8V3.5h9V8"/><rect x="3" y="8" width="14" height="6.5" rx="1"/><path d="M5.5 12.5h9v4.5h-9z"/></svg> Print full cookbook</button>
     </div>
@@ -2557,6 +2571,87 @@ function resizeImageToDataUrl(file, maxDim, quality) {
     reader.readAsDataURL(file);
   });
 }
+// A cookbook photo is much larger than the reader will accept. Shrink it
+// on this phone first, and keep a small preview for the check screen.
+function shrinkPhotoForReading(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 1600;
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        const page = cropRecipePageCanvas(canvas);
+        const blobAt = (q) => new Promise(res => page.toBlob(res, 'image/jpeg', q));
+        (async () => {
+          let q = 0.8;
+          let blob = await blobAt(q);
+          while (blob && blob.size > 900000 && q > 0.45) {
+            q = Math.round((q - 0.1) * 10) / 10;
+            blob = await blobAt(q);
+          }
+          if (!blob) { reject(new Error('Could not read that image')); return; }
+          resolve({ blob, preview: page.toDataURL('image/jpeg', Math.min(q, 0.72)) });
+        })().catch(reject);
+      };
+      img.onerror = () => reject(new Error('Could not read that image'));
+      img.src = reader.result;
+    };
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.readAsDataURL(file);
+  });
+}
+// A phone picture often includes the counter, a finger, or the facing page.
+// Keep the bright paper so the title is not read off the laptop in the corner.
+function cropRecipePageCanvas(canvas) {
+  const w = canvas.width, h = canvas.height;
+  if (w < 40 || h < 40) return canvas;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const img = ctx.getImageData(0, 0, w, h).data;
+  const step = 4;
+  const paper = (x, y) => {
+    const i = (y * w + x) * 4;
+    const r = img[i], g = img[i + 1], b = img[i + 2];
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    return min > 175 && (max - min) < 42;
+  };
+  const rowPaper = (y) => {
+    let n = 0, p = 0;
+    for (let x = 0; x < w; x += step) { n++; if (paper(x, y)) p++; }
+    return n ? p / n : 0;
+  };
+  let top = -1, bot = -1;
+  for (let y = 0; y < h; y += step) if (rowPaper(y) > 0.28) { top = y; break; }
+  for (let y = h - 1; y >= 0; y -= step) if (rowPaper(y) > 0.22) { bot = y; break; }
+  if (top < 0 || bot - top < h * 0.35) return canvas;
+  const colPaper = (x) => {
+    let n = 0, p = 0;
+    for (let y = top; y <= bot; y += step) { n++; if (paper(x, y)) p++; }
+    return n ? p / n : 0;
+  };
+  let left = -1, right = -1;
+  for (let x = 0; x < w; x += step) if (colPaper(x) > 0.35) { left = x; break; }
+  for (let x = w - 1; x >= 0; x -= step) if (colPaper(x) > 0.35) { right = x; break; }
+  if (left < 0 || right - left < w * 0.35) return canvas;
+  const x = Math.max(0, left - 8);
+  const y = Math.max(0, top - 8);
+  const cw = Math.min(w - x, right - left + 24);
+  const ch = Math.min(h - y, bot - top + 24);
+  if (cw > w * 0.97 && ch > h * 0.97) return canvas;
+  const out = document.createElement('canvas');
+  out.width = Math.max(1, cw);
+  out.height = Math.max(1, ch);
+  out.getContext('2d').drawImage(canvas, x, y, cw, ch, 0, 0, cw, ch);
+  return out;
+}
 
 function updateDate(sectionId, dishName, iso) {
   const sec = sections.find(s => s.id === sectionId);
@@ -3200,58 +3295,404 @@ function closeNewRecipeModal() { document.getElementById('newRecipeOverlay').cla
 function linesFromPaste(text) {
   return String(text || '').split('\n').map(line => stripLeadingBullet(line.trim())).filter(Boolean);
 }
+function tidyTitle(name) {
+  const t = String(name || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  if (t !== t.toUpperCase() && t !== t.toLowerCase()) {
+    if (t.charAt(0) === t.charAt(0).toLowerCase()) return t.charAt(0).toUpperCase() + t.slice(1);
+    return t;
+  }
+  const lower = t.toLowerCase();
+  return lower.replace(/\b([a-z])/g, (m, c) => c.toUpperCase());
+}
+function sentenceCase(name) {
+  const lower = String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!lower) return '';
+  return lower.charAt(0).toUpperCase() + lower.slice(1);
+}
+function joinWrap(a, b) {
+  if (/-$/.test(a)) return a.slice(0, -1) + b;
+  return (a + ' ' + b).replace(/\s+/g, ' ').trim();
+}
+function isJunkPhotoLine(line) {
+  if (line.length <= 2) return true;
+  if (/^\d{1,4}$/.test(line)) return true;
+  if (/^[\W_]+$/.test(line)) return true;
+  return false;
+}
+function isPageFooter(line) {
+  if (line.length > 40) return false;
+  return /^\d{1,4}\s*[•·]/.test(line) || /^\d{1,4}\s+[-–]\s+\S+/.test(line);
+}
+function tidyPhotoLine(line) {
+  return line.replace(/\b[Zz]\s*-\s*inch\b/g, '2-inch');
+}
+function footerSource(line) {
+  const m = line.match(/^(?:\d{1,4}\s*[•·]\s+|\d{1,4}\s+[-–]\s+)(.+)$/);
+  if (!m || /[.]/.test(m[1])) return '';
+  const raw = m[1].replace(/[•·|]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!raw || /[^A-Za-z\s'’-]/i.test(raw)) return '';
+  const name = tidyTitle(raw);
+  return (name.match(/[A-Za-z]/g) || []).length >= 4 ? name : '';
+}
+function looksLikeTitle(line) {
+  if (isServesLine(line) || isBanner(line) || isQuantityStart(line) || isStepStart(line)) return false;
+  if (line.length < 3 || line.length > 80 || /[.!?]$/.test(line)) return false;
+  const compact = line.replace(/\s/g, '');
+  const letters = compact.match(/[A-Za-z]/g) || [];
+  return letters.length >= 3 && letters.length / compact.length >= 0.55;
+}
+function isBanner(line) {
+  return /^(prep ahead|make ahead|do ahead|weeknight|quick|advance prep)$/i.test(line);
+}
+function isServesLine(line) {
+  return /^(serves|servings|yield)\b/i.test(line);
+}
+function servesValue(line) {
+  const m = line.match(/^(?:serves|servings|yield)\s*:?\s*(.+)$/i);
+  return m ? m[1].replace(/\.$/, '').trim() : '';
+}
+function isQuantityStart(line) {
+  if (/^\d+\s*-\s*inch\b/i.test(line)) return false;
+  return /^(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+[\u00BC\u00BD\u00BE\u2150-\u215E]|[\u00BC\u00BD\u00BE\u2150-\u215E]|\d+(?:\.\d+)?)\s*(?:-\s*)?(?:[A-Za-z]|\()/.test(line);
+}
+function isStepStart(line) {
+  return /^(In |To |When |Heat |Add |Place |Preheat |Bring |Combine |Using |While |After |Before |Remove |Transfer |Serve |Cook |Stir |Whisk |Bake |Roast |Saut[eé] |Set |Pour |Cover |Let |Return |Reduce |Season |Toss |Mix |Spread |Arrange |Divide |Garnish |Finish |Meanwhile|Once |If |For the |\d+[.)]\s+)/i.test(line);
+}
+function isBareIngredient(line) {
+  if (isStepStart(line) || /\.$/.test(line)) return false;
+  if (line.length > 90) return false;
+  if (/^(kosher |fine |flaky |sea |table )?salt\b/i.test(line)) return true;
+  if (/^freshly ground\b/i.test(line)) return true;
+  if (/^(black |white )?pepper\b/i.test(line)) return true;
+  if (/for serving$/i.test(line)) return true;
+  if (/^(cooked|steamed|boiled|prepared)\b/i.test(line)) return true;
+  return false;
+}
+function isContinuation(line) {
+  if (isQuantityStart(line) || isStepStart(line)) return false;
+  if (/^\(/.test(line)) return true;
+  if (/^[a-z]/.test(line)) return true;
+  if (/^\d+\s*-\s*inch\b/i.test(line)) return true;
+  return false;
+}
+function isNewIngredientLine(line) {
+  if (isQuantityStart(line) || isBareIngredient(line)) return true;
+  if (isStepStart(line) || isContinuation(line)) return false;
+  if (/^(I |Note\b|Tip\b)/.test(line)) return false;
+  if (/\.$/.test(line) || line.length > 80) return false;
+  return /^[A-Z0-9½¼¾]/.test(line);
+}
+function splitSentences(paragraph) {
+  return String(paragraph || '').split(/(?<=[.!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean);
+}
+function groupParagraphs(lines) {
+  const paras = [];
+  let cur = '';
+  const flush = () => {
+    if (!cur.trim()) { cur = ''; return; }
+    splitSentences(cur).forEach(s => paras.push(s));
+    cur = '';
+  };
+  for (const raw of lines) {
+    const line = cur ? raw : raw.replace(/^\d+[.)]\s+/, '');
+    cur = cur ? joinWrap(cur, line) : line;
+    if (/[.!?]["”']?$/.test(line) && !/\b(Mr|Mrs|Dr|vs|etc|oz|lb|tsp|tbsp)\.$/i.test(line)) flush();
+  }
+  flush();
+  return paras;
+}
+// Turns the words from a photographed cookbook page into a dish. Two columns
+// come back as the ingredient list first, then the method.
+function parseCookbookPage(text) {
+  const raw = String(text || '').replace(/\t+/g, ' ').split(/\r?\n/).map(l => tidyPhotoLine(l.replace(/\s+/g, ' ').trim())).filter(Boolean);
+  let source = '';
+  const lines = [];
+  for (const line of raw) {
+    if (isPageFooter(line)) { if (!source) source = footerSource(line); continue; }
+    if (isJunkPhotoLine(line)) continue;
+    lines.push(line);
+  }
+  const result = { name: '', source, prepTime: '', servings: '', cuisine: '', ingredients: [], instructions: [], notes: '' };
+  let idx = 0;
+  const banners = [];
+  while (idx < lines.length) {
+    const line = lines[idx];
+    if (isJunkPhotoLine(line)) { idx++; continue; }
+    if (isBanner(line)) { banners.push(line); idx++; continue; }
+    if (isServesLine(line)) {
+      if (!result.servings) result.servings = servesValue(line);
+      idx++;
+      continue;
+    }
+    if (!result.name && looksLikeTitle(line)) {
+      let title = line;
+      const embedded = title.match(/\b(?:serves|servings|yield)\s*:?\s*(\d[\w\s-]*)/i);
+      if (embedded) {
+        if (!result.servings) result.servings = embedded[1].trim();
+        title = title.replace(embedded[0], ' ').replace(/\s+/g, ' ').trim();
+      }
+      title = title.replace(/^(?:prep ahead|make ahead|do ahead|weeknight|quick|advance prep)\b[:\s-]*/i, '').trim();
+      if (title) result.name = tidyTitle(title);
+      idx++;
+      continue;
+    }
+    break;
+  }
+  const intro = [];
+  while (idx < lines.length && !isQuantityStart(lines[idx]) && !isBareIngredient(lines[idx]) && !isStepStart(lines[idx])) {
+    intro.push(lines[idx++]);
+  }
+  const noteLines = [];
+  let mode = 'ingredients';
+  while (idx < lines.length) {
+    const line = lines[idx];
+    if (mode === 'ingredients') {
+      if (isStepStart(line)) { mode = 'steps'; break; }
+      if (/^(I |Note\b|Tip\b)/.test(line) && result.ingredients.length >= 2) {
+        mode = 'note';
+        noteLines.push(line);
+        idx++;
+        continue;
+      }
+      const prev = result.ingredients[result.ingredients.length - 1] || '';
+      const hung = /[,;:]$/.test(prev) || /-$/.test(prev);
+      if (result.ingredients.length && (isContinuation(line) || (hung && !isNewIngredientLine(line) && !isStepStart(line)))) {
+        result.ingredients[result.ingredients.length - 1] = joinWrap(prev, line);
+        idx++;
+        continue;
+      }
+      if (isNewIngredientLine(line)) {
+        result.ingredients.push(line);
+        idx++;
+        continue;
+      }
+      mode = 'note';
+      continue;
+    }
+    if (mode === 'note') {
+      if (isStepStart(line)) { mode = 'steps'; break; }
+      noteLines.push(line);
+      idx++;
+    }
+  }
+  result.instructions = groupParagraphs(lines.slice(idx));
+  const noteParts = [];
+  if (banners.length) noteParts.push(banners.map(b => sentenceCase(b)).join('. ') + '.');
+  if (intro.length) noteParts.push(groupParagraphs(intro).join(' '));
+  if (noteLines.length) noteParts.push(groupParagraphs(noteLines).join('\n\n'));
+  result.notes = noteParts.filter(Boolean).join('\n\n');
+  return result;
+}
+function parsePhotoRecipeText(text) {
+  const hasHeads = /^ingredients\b/im.test(text) && /^(instructions|directions|steps|method)\b/im.test(text);
+  if (hasHeads) {
+    const parsed = parsePastedRecipe(text);
+    if (parsed.name && (parsed.ingredients.length || parsed.instructions.length)) return parsed;
+  }
+  return parseCookbookPage(text);
+}
+function guessPhotoCategory(name, ingredients) {
+  const blob = `${name} ${(ingredients || []).join(' ')}`.toLowerCase();
+  const rules = [
+    ['breakfast', /pancake|waffle|oatmeal|granola|french toast|breakfast/],
+    ['dessert', /\bcake\b|cookie|brownie|ice cream|\bpie\b|dessert/],
+    ['soupstew', /\bsoup\b|\bstew\b|\bchili\b/],
+    ['salads', /\bsalad\b/],
+    ['pasta', /pasta|spaghetti|penne|noodle|lasagna|linguine|ravioli/],
+    ['seafood', /salmon|shrimp|\bfish\b|\bcod\b|\btuna\b|crab|scallop|halibut|prawn/],
+    ['porklamb', /\bpork\b|bacon|sausage|\bham\b|prosciutto/],
+    ['beef', /\bbeef\b|steak|\blamb\b|burger/],
+    ['poultry', /chicken|turkey|\bduck\b|poultry/],
+    ['eggs', /tofu|chickpea|lentil|vegetarian/]
+  ];
+  for (const [id, re] of rules) {
+    if (re.test(blob) && sections.some(s => s.id === id)) return id;
+  }
+  return sections[0] ? sections[0].id : '';
+}
+
+let photoReadToken = 0;
+let photoReadPreview = '';
+// The free reader at ocr.space. Engine 2 keeps the left column (ingredients)
+// ahead of the right column (the method). The demo key is the one they publish.
+const PHOTO_READER_URL = 'https://api.ocr.space/parse/image';
+const PHOTO_READER_KEY = 'helloworld';
+
 function openPhotoRecipeGuide() {
+  const input = document.getElementById('photoRecipeFile');
+  input.value = '';
+  input.click();
+}
+function photoReadShell(status, extra) {
   const modal = document.getElementById('pasteRecipeModal');
+  modal.classList.add('photo-read-modal');
   modal.innerHTML = `
-    <div class="picker-eyebrow">Add from a photo</div>
-    <p style="font-size:0.95em;color:var(--ink-dim);line-height:1.5;margin:0 0 12px;text-align:left;">Copy the page in three pieces. Plus does not need the words Ingredients or Instructions.</p>
-    <ol class="photo-steps">
-      <li>Open the photo. Tap the Live Text icon, the small lines inside a box.</li>
-      <li>Select only the dish name and copy it into <strong>Dish name</strong>.</li>
-      <li>Select only the ingredient list, usually the left column, and paste it below.</li>
-      <li>Select only the steps, usually the right column, and paste those in <strong>Steps</strong>.</li>
-    </ol>
-    <div class="recipe-section-label" style="margin-top:0;">Category</div>
-    <select class="day-editor-select" id="photoRecipeCategory">${sections.map(s => `<option value="${s.id}">${escapeHtml(s.title)}</option>`).join('')}</select>
-    <div class="recipe-section-label">Dish name</div>
-    <input class="sync-input" id="photoRecipeName" placeholder="Sesame ginger chicken bowl">
-    <div class="recipe-section-label">Ingredients</div>
-    <textarea class="sync-input" id="photoRecipeIngredients" rows="6" placeholder="One ingredient on each line" style="min-height:120px;"></textarea>
-    <div class="recipe-section-label">Steps</div>
-    <textarea class="sync-input" id="photoRecipeSteps" rows="6" placeholder="One step on each line, or one paragraph per step" style="min-height:120px;"></textarea>
+    <div class="photo-read-body">
+      <div class="picker-eyebrow">Add from a photo</div>
+      ${photoReadPreview ? `<img class="photo-read-preview" alt="" src="${photoReadPreview}">` : ''}
+      <p class="photo-read-note">${status}</p>
+      ${extra || ''}
+    </div>
     <div class="picker-actions">
-      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="save-photo-recipe">Save and review</button>
       <button class="picker-action-btn picker-secondary" data-action="close-photo-recipe">Cancel</button>
     </div>`;
   modal.querySelector('[data-action="close-photo-recipe"]').addEventListener('click', closePasteRecipeModal);
-  modal.querySelector('[data-action="save-photo-recipe"]').addEventListener('click', () => {
-    const sectionId = document.getElementById('photoRecipeCategory').value;
-    let name = document.getElementById('photoRecipeName').value.trim();
-    const ingredients = linesFromPaste(document.getElementById('photoRecipeIngredients').value);
-    const instructions = linesFromPaste(document.getElementById('photoRecipeSteps').value);
-    if (!name) { showToast('Paste the dish name first'); return; }
-    if (!ingredients.length && !instructions.length) { showToast('Paste the ingredient list or the steps'); return; }
-    const sec = sections.find(s => s.id === sectionId);
-    if (!sec) return;
-    if (sec.dishes.some(d => d.name.toLowerCase() === name.toLowerCase())) {
-      let n = 2;
-      while (sec.dishes.some(d => d.name.toLowerCase() === `${name} (${n})`.toLowerCase())) n++;
-      name = `${name} (${n})`;
-    }
-    const dish = { name };
-    if (ingredients.length) dish.ingredients = ingredients;
-    if (instructions.length) dish.instructions = instructions;
-    sec.dishes.push(dish);
-    saveData();
-    render();
-    closePasteRecipeModal();
-    openRecipeModal(sectionId, name, true);
-  });
   document.getElementById('pasteRecipeOverlay').classList.add('show');
+  return modal;
+}
+function showPhotoReadError(message) {
+  const modal = photoReadShell(escapeHtml(message), '');
+  const actions = modal.querySelector('.picker-actions');
+  const again = document.createElement('button');
+  again.type = 'button';
+  again.className = 'picker-action-btn picker-primary';
+  again.style.background = 'var(--ink)';
+  again.style.color = '#fff';
+  again.textContent = 'Try another photo';
+  again.addEventListener('click', openPhotoRecipeGuide);
+  actions.insertBefore(again, actions.firstChild);
+}
+async function readRecipePhotoOnce(blob) {
+  const body = new FormData();
+  body.append('apikey', PHOTO_READER_KEY);
+  body.append('language', 'eng');
+  body.append('OCREngine', '2');
+  body.append('scale', 'true');
+  body.append('detectOrientation', 'true');
+  body.append('isOverlayRequired', 'false');
+  body.append('file', blob, 'recipe.jpg');
+  let res;
+  try {
+    res = await fetch(PHOTO_READER_URL, { method: 'POST', body });
+  } catch (e) {
+    throw new Error('Plus could not reach the reader. Check the connection and try again.');
+  }
+  if (!res.ok) throw new Error('The reader needs a moment. Try the photo again in a few seconds.');
+  const data = await res.json();
+  const rawMsg = Array.isArray(data.ErrorMessage) ? data.ErrorMessage.join(' ') : (data.ErrorMessage || '');
+  const failed = data.IsErroredOnProcessing || data.OCRExitCode === 3 || data.OCRExitCode === 4;
+  if (failed) {
+    if (/limit|second|quota|key|busy/i.test(rawMsg)) {
+      throw new Error('The reader needs a moment. Try the photo again in a few seconds.');
+    }
+    throw new Error('Plus could not read that photo. Move closer, so the page fills the picture, and try again.');
+  }
+  const text = (data.ParsedResults || []).map(r => r.ParsedText || '').join('\n').trim();
+  if (!text) throw new Error('Plus could not find any words in that photo. Move closer and try again.');
+  return text;
+}
+async function readRecipePhoto(blob) {
+  try {
+    return await readRecipePhotoOnce(blob);
+  } catch (err) {
+    if (!/needs a moment/i.test(err.message)) throw err;
+    await new Promise(r => setTimeout(r, 3500));
+    return readRecipePhotoOnce(blob);
+  }
+}
+function showPhotoRecipeReview(parsed) {
+  const modal = document.getElementById('pasteRecipeModal');
+  const category = guessPhotoCategory(parsed.name, parsed.ingredients);
+  modal.classList.add('photo-read-modal');
+  modal.innerHTML = `
+    <div class="photo-read-body">
+    <div class="picker-eyebrow">Add from a photo</div>
+    ${photoReadPreview ? `<img class="photo-read-preview" alt="" src="${photoReadPreview}">` : ''}
+    <p class="photo-read-note">Check this, then add it. The photo is sent to be read and is not saved in the family share.</p>
+    <div class="recipe-section-label" style="margin-top:0;">Category</div>
+    <select class="day-editor-select" id="photoRecipeCategory">${sections.map(s => `<option value="${s.id}"${s.id === category ? ' selected' : ''}>${escapeHtml(s.title)}</option>`).join('')}</select>
+    <div class="recipe-section-label">Dish name</div>
+    <input class="sync-input" id="photoRecipeName" value="${escapeHtml(parsed.name || '')}">
+    <div class="recipe-edit-row">
+      <input class="sync-input" id="photoRecipeServings" placeholder="Servings" value="${escapeHtml(parsed.servings || '')}">
+      <input class="sync-input" id="photoRecipeSource" placeholder="Cookbook" value="${escapeHtml(parsed.source || '')}">
+    </div>
+    <div class="recipe-section-label">Ingredients</div>
+    <textarea class="sync-input" id="photoRecipeIngredients" rows="8" style="min-height:140px;">${escapeHtml((parsed.ingredients || []).join('\n'))}</textarea>
+    <div class="recipe-section-label">Steps</div>
+    <textarea class="sync-input" id="photoRecipeSteps" rows="8" style="min-height:140px;">${escapeHtml((parsed.instructions || []).join('\n'))}</textarea>
+    <div class="recipe-section-label">Notes</div>
+    <textarea class="sync-input" id="photoRecipeNotes" rows="4" style="min-height:72px;">${escapeHtml(parsed.notes || '')}</textarea>
+    </div>
+    <div class="picker-actions">
+      <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="save-photo-recipe">Add this recipe</button>
+      <button class="picker-action-btn picker-secondary" data-action="close-photo-recipe">Cancel</button>
+    </div>`;
+  modal.querySelector('[data-action="close-photo-recipe"]').addEventListener('click', closePasteRecipeModal);
+  modal.querySelector('[data-action="save-photo-recipe"]').addEventListener('click', savePhotoRecipe);
+  document.getElementById('pasteRecipeOverlay').classList.add('show');
+  const nameInput = document.getElementById('photoRecipeName');
+  if (nameInput && !nameInput.value) nameInput.focus();
+}
+function savePhotoRecipe() {
+  const sectionId = document.getElementById('photoRecipeCategory').value;
+  let name = document.getElementById('photoRecipeName').value.trim();
+  const ingredients = linesFromPaste(document.getElementById('photoRecipeIngredients').value);
+  const instructions = linesFromPaste(document.getElementById('photoRecipeSteps').value);
+  const servings = document.getElementById('photoRecipeServings').value.trim();
+  const source = document.getElementById('photoRecipeSource').value.trim();
+  const notes = document.getElementById('photoRecipeNotes').value.trim();
+  if (!name) { showToast('Give the dish a name first'); return; }
+  if (!ingredients.length && !instructions.length) { showToast('This photo did not produce a recipe to add'); return; }
+  const sec = sections.find(s => s.id === sectionId);
+  if (!sec) return;
+  if (sec.dishes.some(d => d.name.toLowerCase() === name.toLowerCase())) {
+    let n = 2;
+    while (sec.dishes.some(d => d.name.toLowerCase() === `${name} (${n})`.toLowerCase())) n++;
+    name = `${name} (${n})`;
+  }
+  const dish = { name };
+  if (source) dish.source = source;
+  if (servings) dish.servings = servings;
+  if (ingredients.length) dish.ingredients = ingredients;
+  if (instructions.length) dish.instructions = instructions;
+  if (notes) dish.notes = notes;
+  const who = memberName();
+  if (who) dish.addedBy = who;
+  sec.dishes.push(dish);
+  saveData();
+  render();
+  const overlay = document.getElementById('pasteRecipeOverlay');
+  overlay.style.transition = 'none';
+  closePasteRecipeModal();
+  void overlay.offsetWidth;
+  overlay.style.transition = '';
+  showToast(`Added ${name}`);
+  openRecipeModal(sectionId, name);
+}
+async function beginPhotoRecipe(file) {
+  const token = ++photoReadToken;
+  photoReadPreview = '';
+  if (!file.type || file.type.indexOf('image/') !== 0) {
+    showPhotoReadError('Choose a photo of the recipe page.');
+    return;
+  }
+  photoReadShell('Preparing the photo…');
+  let shrunk;
+  try {
+    shrunk = await shrinkPhotoForReading(file);
+  } catch (e) {
+    if (token !== photoReadToken) return;
+    showPhotoReadError('Plus could not open that photo. Try a screenshot or a JPEG.');
+    return;
+  }
+  if (token !== photoReadToken) return;
+  photoReadPreview = shrunk.preview;
+  photoReadShell('Reading the page…');
+  try {
+    const text = await readRecipePhoto(shrunk.blob);
+    if (token !== photoReadToken) return;
+    showPhotoRecipeReview(parsePhotoRecipeText(text));
+  } catch (e) {
+    if (token !== photoReadToken) return;
+    showPhotoReadError(e.message || 'Plus could not read that photo.');
+  }
 }
 
 function openPasteRecipeModal() {
   const modal = document.getElementById('pasteRecipeModal');
+  modal.classList.remove('photo-read-modal');
   modal.innerHTML = `
     <div class="picker-eyebrow">Paste a recipe</div>
     <p style="font-size:0.85em;color:var(--ink-dim);line-height:1.5;margin:0 0 16px;">
@@ -3305,7 +3746,10 @@ function openPasteRecipeModal() {
   document.getElementById('pasteRecipeOverlay').classList.add('show');
   textInput.focus();
 }
-function closePasteRecipeModal() { document.getElementById('pasteRecipeOverlay').classList.remove('show'); }
+function closePasteRecipeModal() {
+  photoReadToken++;
+  document.getElementById('pasteRecipeOverlay').classList.remove('show');
+}
 
 function toggleFavorite(sectionId, dishName) {
   const sec = sections.find(s => s.id === sectionId);
@@ -6938,7 +7382,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you copy the dish name, the ingredient list, and the steps separately with Live Text. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish, and you tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
@@ -7668,6 +8112,12 @@ document.getElementById('spiceFilterSelect').addEventListener('change', e => { f
 document.getElementById('manageCookbooksBtn').addEventListener('click', openManageCookbooksModal);
 document.getElementById('newRecipeBtn').addEventListener('click', openNewRecipeModal);
 document.getElementById('photoRecipeBtn').addEventListener('click', openPhotoRecipeGuide);
+document.getElementById('photoRecipeFile').addEventListener('change', () => {
+  const input = document.getElementById('photoRecipeFile');
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (file) beginPhotoRecipe(file);
+});
 document.getElementById('pasteRecipeBtn').addEventListener('click', openPasteRecipeModal);
 document.getElementById('printCookbookBtn').addEventListener('click', openCookbookPrintPreview);
 document.getElementById('menuNewRecipeBtn').addEventListener('click', openNewRecipeModal);
