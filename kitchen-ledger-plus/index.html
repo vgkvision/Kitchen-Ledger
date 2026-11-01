@@ -3909,6 +3909,10 @@ function dishForCloud(d) {
 function cloudMeta() {
   return { menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList };
 }
+function menuHasPlans(candidate) {
+  if (!candidate || typeof candidate !== 'object') return false;
+  return Object.keys(candidate).some(key => Array.isArray(candidate[key]) && candidate[key].length);
+}
 
 async function syncPush() {
   const { apiKey, binId: manifestBinId } = getSyncCreds();
@@ -3939,7 +3943,25 @@ async function syncPush() {
       await sleep(120); // small pacing between requests — avoids tripping a rate limit
     }
 
-    const metaPayload = cloudMeta();
+    let metaPayload = cloudMeta();
+    // An empty week on one screen must not erase dinners that are already
+    // saved for the family. Keep the saved week, and show it here.
+    if (!menuHasPlans(metaPayload.menu) && manifest.metaBinId) {
+      let existingMeta = null;
+      try { existingMeta = await jsonbinFetch(apiKey, manifest.metaBinId); }
+      catch (e) { existingMeta = null; }
+      if (existingMeta && menuHasPlans(existingMeta.menu)) {
+        metaPayload = Object.assign({}, metaPayload, { menu: existingMeta.menu });
+        menu = existingMeta.menu;
+        try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
+        renderMenuView();
+        renderShoppingView();
+      } else if (!existingMeta) {
+        lastSyncPushError = 'Could not confirm the saved week, so this device did not replace it.';
+        indicator.textContent = lastSyncPushError;
+        return;
+      }
+    }
     const metaKB = payloadSizeKB(metaPayload);
     if (metaKB != null && metaKB > JSONBIN_SIZE_LIMIT_KB) {
       lastSyncPushError = `Sync failed — your menu and shopping list together are ${metaKB} KB, over the ${JSONBIN_SIZE_LIMIT_KB} KB free-tier limit per item.`;
@@ -3976,7 +3998,12 @@ function applyExternalData(data, opts = {}) {
   if (!opts.skipSnapshot) snapshotLocalState();
   harvestLocalPhotos(sections);
   sections = data.sections || [];
-  menu = data.menu || {};
+  const incomingMenu = data.menu || {};
+  if (opts.preserveLocalMenu && !menuHasPlans(incomingMenu) && menuHasPlans(menu)) {
+    markPushPending();
+  } else {
+    menu = incomingMenu;
+  }
   knownCookbooks = data.cookbooks || [];
   shoppingList = data.shoppingList || [];
   categoryOverrides = data.categoryOverrides || {};
@@ -4207,7 +4234,7 @@ function wireSyncModal() {
     }
     const cloud = await syncPull();
     const pullFailed = !cloud;
-    if (cloud) applyExternalData(cloud);
+    if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
     await syncPush();
     renderSyncModal(pullFailed ? (lastSyncPullError || 'Could not reach the cloud — check your connection.') : 'Up to date.');
   }));
@@ -4256,8 +4283,8 @@ function wireSyncModal() {
     }
     const cloud = await syncPull();
     if (cloud) {
-      applyExternalData(cloud);
-      clearPushPending();
+      applyExternalData(cloud, { preserveLocalMenu: true });
+      if (!hasPendingPush()) clearPushPending();
       updateSyncBtn();
       renderSyncModal();
       showToast('Sync connected');
@@ -7541,7 +7568,7 @@ updateSyncBtn();
 // and only pulls if that's confirmed safe, same protection as everywhere else.
 async function safeSyncCheck() {
   if (!isSyncConnected()) return;
-  if (hasPendingPush()) {
+  if (hasPendingPush() || menuHasPlans(menu)) {
     await syncPush();
     if (hasPendingPush()) {
       const indicator = document.getElementById('saveIndicator');
@@ -7550,7 +7577,8 @@ async function safeSyncCheck() {
     }
   }
   const cloud = await syncPull();
-  if (cloud) applyExternalData(cloud);
+  if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
+  if (hasPendingPush()) await syncPush();
 }
 safeSyncCheck();
 
