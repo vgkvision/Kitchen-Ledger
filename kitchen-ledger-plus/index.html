@@ -928,15 +928,41 @@
   .picker-modal.photo-read-modal {
     text-align: left; display: flex; flex-direction: column;
     overflow: hidden; padding-bottom: 16px;
+    max-width: min(980px, calc(100vw - 32px));
+    max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
   }
   .photo-read-body { overflow-y: auto; min-height: 0; }
+  .photo-read-check { display: flex; flex-direction: column; gap: 12px; }
+  .photo-read-page {
+    position: sticky; top: 0; z-index: 2; background: var(--surface); padding-bottom: 4px;
+  }
   .photo-read-preview {
-    display: block; width: 100%; max-height: 160px; object-fit: cover; object-position: top;
-    border-radius: 6px; margin: 0 0 12px; background: var(--tint);
+    display: block; width: 100%; max-height: 34vh; object-fit: contain; object-position: top center;
+    border-radius: 6px; margin: 0; background: var(--tint); border: 1px solid var(--hairline);
+  }
+  .photo-page-zoom {
+    font-family: 'Inter', sans-serif; font-size: 0.82em; margin-top: 8px; width: 100%;
+    min-height: 44px; border-radius: 3px; border: 1px solid var(--hairline-strong);
+    background: var(--surface); color: var(--ink); cursor: pointer;
   }
   .photo-read-note { font-size: 0.9em; color: var(--ink-dim); line-height: 1.45; margin: 0 0 12px; }
   .photo-read-modal .picker-actions { flex-shrink: 0; margin: 12px 0 0; }
   .photo-read-modal .recipe-edit-row { margin-top: 8px; }
+  .picker-modal.photo-read-modal.photo-page-large .photo-read-fields { display: none; }
+  .picker-modal.photo-read-modal.photo-page-large .photo-read-preview {
+    max-height: calc(100dvh - 210px);
+  }
+  @media (min-width: 800px) {
+    .photo-read-check {
+      display: grid; grid-template-columns: minmax(260px, 0.92fr) minmax(280px, 1.08fr);
+      gap: 18px; align-items: start;
+    }
+    .photo-read-preview { max-height: calc(100dvh - 230px); }
+    .picker-modal.photo-read-modal.photo-page-large .photo-read-check { display: block; }
+    .picker-modal.photo-read-modal.photo-page-large .photo-read-preview {
+      max-height: calc(100dvh - 230px);
+    }
+  }
   .fridge-sheet { text-align: left; background: #fff; color: #292420; }
   .fridge-sheet-title {
     font-family: 'Fraunces', Georgia, serif; font-weight: 560; font-size: 34px;
@@ -2599,7 +2625,7 @@ function shrinkPhotoForReading(file) {
             blob = await blobAt(q);
           }
           if (!blob) { reject(new Error('Could not read that image')); return; }
-          resolve({ blob, preview: page.toDataURL('image/jpeg', Math.min(q, 0.72)) });
+          resolve({ blob, preview: page.toDataURL('image/jpeg', 0.86) });
         })().catch(reject);
       };
       img.onerror = () => reject(new Error('Could not read that image'));
@@ -3751,25 +3777,32 @@ function showPhotoRecipeReview(parsed) {
   const modal = document.getElementById('pasteRecipeModal');
   const category = guessPhotoCategory(parsed.name, parsed.ingredients);
   modal.classList.add('photo-read-modal');
+  const pagePhoto = photoReadPreview
+    ? `<div class="photo-read-page"><img class="photo-read-preview" alt="The cookbook page" src="${photoReadPreview}"><button type="button" class="photo-page-zoom" data-action="zoom-photo-page">Make the page bigger</button></div>`
+    : '';
   modal.innerHTML = `
     <div class="photo-read-body">
     <div class="picker-eyebrow">Add from a photo</div>
-    ${photoReadPreview ? `<img class="photo-read-preview" alt="" src="${photoReadPreview}">` : ''}
-    <p class="photo-read-note">Check this, then add it. The photo is sent to be read and is not saved in the family share.</p>
-    <div class="recipe-section-label" style="margin-top:0;">Category</div>
-    <select class="day-editor-select" id="photoRecipeCategory">${sections.map(s => `<option value="${s.id}"${s.id === category ? ' selected' : ''}>${escapeHtml(s.title)}</option>`).join('')}</select>
-    <div class="recipe-section-label">Dish name</div>
-    <input class="sync-input" id="photoRecipeName" value="${escapeHtml(parsed.name || '')}">
-    <div class="recipe-edit-row">
-      <input class="sync-input" id="photoRecipeServings" placeholder="Servings" value="${escapeHtml(parsed.servings || '')}">
-      <input class="sync-input" id="photoRecipeSource" list="cookbookSuggestions" autocomplete="off" placeholder="Start typing a cookbook" value="${escapeHtml(parsed.source || '')}">
+    <p class="photo-read-note">The page stays here. Match the amounts to it, then add the dish. The photo is sent to be read and is not saved in the family share.</p>
+    <div class="photo-read-check">
+      ${pagePhoto}
+      <div class="photo-read-fields">
+        <div class="recipe-section-label" style="margin-top:0;">Category</div>
+        <select class="day-editor-select" id="photoRecipeCategory">${sections.map(s => `<option value="${s.id}"${s.id === category ? ' selected' : ''}>${escapeHtml(s.title)}</option>`).join('')}</select>
+        <div class="recipe-section-label">Dish name</div>
+        <input class="sync-input" id="photoRecipeName" value="${escapeHtml(parsed.name || '')}">
+        <div class="recipe-edit-row">
+          <input class="sync-input" id="photoRecipeServings" placeholder="Servings" value="${escapeHtml(parsed.servings || '')}">
+          <input class="sync-input" id="photoRecipeSource" list="cookbookSuggestions" autocomplete="off" placeholder="Start typing a cookbook" value="${escapeHtml(parsed.source || '')}">
+        </div>
+        <div class="recipe-section-label">Ingredients</div>
+        <textarea class="sync-input" id="photoRecipeIngredients" rows="8" style="min-height:180px;">${escapeHtml((parsed.ingredients || []).join('\n'))}</textarea>
+        <div class="recipe-section-label">Steps</div>
+        <textarea class="sync-input" id="photoRecipeSteps" rows="8" style="min-height:140px;">${escapeHtml((parsed.instructions || []).join('\n'))}</textarea>
+        <div class="recipe-section-label">Notes</div>
+        <textarea class="sync-input" id="photoRecipeNotes" rows="4" style="min-height:72px;">${escapeHtml(parsed.notes || '')}</textarea>
+      </div>
     </div>
-    <div class="recipe-section-label">Ingredients</div>
-    <textarea class="sync-input" id="photoRecipeIngredients" rows="8" style="min-height:140px;">${escapeHtml((parsed.ingredients || []).join('\n'))}</textarea>
-    <div class="recipe-section-label">Steps</div>
-    <textarea class="sync-input" id="photoRecipeSteps" rows="8" style="min-height:140px;">${escapeHtml((parsed.instructions || []).join('\n'))}</textarea>
-    <div class="recipe-section-label">Notes</div>
-    <textarea class="sync-input" id="photoRecipeNotes" rows="4" style="min-height:72px;">${escapeHtml(parsed.notes || '')}</textarea>
     </div>
     <div class="picker-actions">
       <button class="picker-action-btn picker-primary" style="background:var(--ink);color:#fff" data-action="save-photo-recipe">Add this recipe</button>
@@ -3777,6 +3810,14 @@ function showPhotoRecipeReview(parsed) {
     </div>`;
   modal.querySelector('[data-action="close-photo-recipe"]').addEventListener('click', closePasteRecipeModal);
   modal.querySelector('[data-action="save-photo-recipe"]').addEventListener('click', savePhotoRecipe);
+  const zoomBtn = modal.querySelector('[data-action="zoom-photo-page"]');
+  const zoomPhoto = () => {
+    const large = modal.classList.toggle('photo-page-large');
+    if (zoomBtn) zoomBtn.textContent = large ? 'Back to the recipe' : 'Make the page bigger';
+  };
+  if (zoomBtn) zoomBtn.addEventListener('click', zoomPhoto);
+  const previewImg = modal.querySelector('.photo-read-preview');
+  if (previewImg) previewImg.addEventListener('click', zoomPhoto);
   document.getElementById('pasteRecipeOverlay').classList.add('show');
   const nameInput = document.getElementById('photoRecipeName');
   if (nameInput && !nameInput.value) nameInput.focus();
@@ -7538,7 +7579,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish, and you tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
