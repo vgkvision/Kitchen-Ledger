@@ -3403,16 +3403,71 @@ function closeNewRecipeModal() { document.getElementById('newRecipeOverlay').cla
 function linesFromPaste(text) {
   return String(text || '').split('\n').map(line => stripLeadingBullet(line.trim())).filter(Boolean);
 }
-function tidyTitle(name) {
-  let t = String(name || '').replace(/\s+/g, ' ').trim();
-  if (!t) return '';
-  t = t.replace(/([a-z\u00E0-\u00FF])([A-Z]+)(?![A-Za-z])/g, (m, a, caps) => a + caps.toLowerCase());
-  if (t !== t.toUpperCase() && t !== t.toLowerCase()) {
-    if (t.charAt(0) === t.charAt(0).toLowerCase()) return t.charAt(0).toUpperCase() + t.slice(1);
-    return t;
+function isCasedLetter(ch) {
+  return ch.toLowerCase() !== ch.toUpperCase();
+}
+function titleCaseWords(text) {
+  let out = '';
+  let cap = true;
+  for (const ch of text.toLowerCase()) {
+    if (!isCasedLetter(ch)) {
+      out += ch;
+      cap = ch !== "'" && ch !== '’';
+      continue;
+    }
+    out += cap ? ch.toUpperCase() : ch;
+    cap = false;
   }
-  const lower = t.toLowerCase();
-  return lower.replace(/(^|[^A-Za-z'])([a-z])/g, (m, pre, c) => pre + c.toUpperCase());
+  return out;
+}
+function tidyTitle(name) {
+  let t = String(name || '').normalize('NFC').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  // A whole title in one case (the usual photo read) gets normal title case.
+  // Accented letters count as letters, so "FRISÉE" becomes "Frisée" and not "FriséE".
+  if (t === t.toUpperCase() || t === t.toLowerCase()) return titleCaseWords(t);
+  // A mixed title is kept as written, except a word the reader capitalized
+  // in the middle (the second e in "FriséE"). Words like BBQ and O'Brien stay.
+  let repaired = false;
+  const mixed = t.replace(/[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]+/g, part => {
+    const chars = [...part];
+    if (chars.length < 2) return part;
+    const hasLower = chars.some(c => isCasedLetter(c) && c === c.toLowerCase());
+    const hasInnerUpper = chars.slice(1).some(c => isCasedLetter(c) && c === c.toUpperCase());
+    if (!hasLower || !hasInnerUpper) return part;
+    repaired = true;
+    const lower = [...part.toLowerCase()];
+    return lower[0].toUpperCase() + lower.slice(1).join('');
+  });
+  return repaired ? titleCaseWords(mixed) : mixed;
+}
+function repairSavedTitles(secs, menuObj) {
+  let changed = false;
+  (secs || []).forEach(sec => {
+    (sec.dishes || []).forEach(dish => {
+      const fixed = tidyTitle(dish.name);
+      if (fixed && fixed !== dish.name) {
+        const clash = sec.dishes.some(d => d !== dish && d.name.toLowerCase() === fixed.toLowerCase());
+        if (!clash) {
+          const oldName = dish.name;
+          dish.name = fixed;
+          rekeyLocalPhoto(sec.id, oldName, sec.id, fixed);
+          Object.keys(menuObj || {}).forEach(iso => {
+            (menuObj[iso] || []).forEach(item => {
+              if (item.sectionId === sec.id && item.dishName === oldName) item.dishName = fixed;
+            });
+          });
+          changed = true;
+        }
+      }
+      (dish.subRecipes || []).forEach(sr => {
+        if (!sr || !sr.name) return;
+        const subFixed = tidyTitle(sr.name);
+        if (subFixed && subFixed !== sr.name) { sr.name = subFixed; changed = true; }
+      });
+    });
+  });
+  return changed;
 }
 function sentenceCase(name) {
   const lower = String(name || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -4798,6 +4853,7 @@ function applyExternalData(data, opts = {}) {
   migrateSectionColors(sections);
   migrateWineDefaults(sections);
   migrateMenuFormat(menu);
+  if (repairSavedTitles(sections, menu)) markPushPending();
   syncKnownCookbooksFromDishes();
   migrateItemCategoriesToGlobal();
   syncLastMadeFromMenu();
@@ -8333,7 +8389,9 @@ document.getElementById('backupRestoreInput').addEventListener('change', () => {
 });
 menu = loadMenu();
 migrateMenuFormat(menu);
+if (repairSavedTitles(sections, menu)) markPushPending();
 try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
+try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sections)); } catch (e) { /* ignore */ }
 if (syncLastMadeFromMenu()) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sections)); } catch (e) { /* ignore */ }
 }
