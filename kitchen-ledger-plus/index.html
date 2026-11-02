@@ -3404,8 +3404,9 @@ function linesFromPaste(text) {
   return String(text || '').split('\n').map(line => stripLeadingBullet(line.trim())).filter(Boolean);
 }
 function tidyTitle(name) {
-  const t = String(name || '').replace(/\s+/g, ' ').trim();
+  let t = String(name || '').replace(/\s+/g, ' ').trim();
   if (!t) return '';
+  t = t.replace(/([a-z\u00E0-\u00FF])([A-Z]+)(?![A-Za-z])/g, (m, a, caps) => a + caps.toLowerCase());
   if (t !== t.toUpperCase() && t !== t.toLowerCase()) {
     if (t.charAt(0) === t.charAt(0).toLowerCase()) return t.charAt(0).toUpperCase() + t.slice(1);
     return t;
@@ -3439,7 +3440,7 @@ function isStrayWord(line) {
   return !/^(divided|chopped|diced|sliced|minced|grated|halved|peeled|seeded|toasted|melted|softened|packed|sifted|optional|cubed|drained|rinsed|trimmed|crushed|ground|beaten|cooled|warmed|chilled|thawed)$/.test(line);
 }
 function stripNonLatin(text) {
-  return String(text || '').replace(/[^\s\dA-Za-z\u00C0-\u024F\u1E00-\u1EFF\u00BC\u00BD\u00BE\u2150-\u215E.,;:'’"“”()\[\]\-\/&%°+#•·–—]/g, '');
+  return String(text || '').replace(/[^\s\dA-Za-z\u00C0-\u024F\u1E00-\u1EFF\u00BC\u00BD\u00BE\u2150-\u215E.,;:!?¿'’"“”()\[\]\-\/&%°+#•·–—]/g, '');
 }
 function tidyPhotoLine(line) {
   return stripNonLatin(line).replace(/\b[Zz]\s*-\s*inch\b/g, '2-inch').replace(/\s+/g, ' ').trim();
@@ -3539,6 +3540,62 @@ function isQuantityStart(line) {
 function isStepStart(line) {
   return /^(In |To |When |Heat |Add |Place |Preheat |Bring |Combine |Using |While |After |Before |Remove |Transfer |Serve |Cook |Stir |Whisk |Bake |Roast |Saut[eé] |Set |Pour |Cover |Let |Return |Reduce |Season |Toss |Mix |Spread |Arrange |Divide |Garnish |Finish |Meanwhile|Once |If |For the |\d+[.)]\s+)/i.test(line);
 }
+function quantityAhead(lines, idx) {
+  const end = Math.min(lines.length, idx + 16);
+  for (let i = idx + 1; i < end; i++) {
+    if (isQuantityStart(lines[i]) || isBareIngredient(lines[i])) return true;
+  }
+  return false;
+}
+function looksLikeComponentTitle(line) {
+  if (!line || line.length > 32 || /[.!?,;:]$/.test(line)) return false;
+  if (isStepStart(line) || isQuantityStart(line) || isServesLine(line) || isBanner(line)) return false;
+  const words = line.trim().split(/\s+/);
+  return words.length >= 1 && words.length <= 4 && /^[A-Za-z]/.test(line);
+}
+function componentAt(lines, start) {
+  let title = lines[start];
+  let servings = '';
+  let i = start + 1;
+  const inline = String(title || '').match(/^(.*?)\s+((?:makes|serves|servings|yield)\s+.+)$/i);
+  if (inline && looksLikeComponentTitle(inline[1].trim())) {
+    title = inline[1].trim();
+    const yieldLine = inline[2];
+    const split = splitYield(yieldLine.replace(/^(?:makes|serves|servings|yield)\s*/i, ''));
+    servings = /^makes/i.test(yieldLine) ? ('Makes ' + split.servings) : split.servings;
+  } else if (!looksLikeComponentTitle(title)) {
+    return null;
+  } else if (i < lines.length && /^(?:makes|serves|servings|yield)\b/i.test(lines[i])) {
+    const yieldLine = lines[i];
+    const split = splitYield(yieldLine.replace(/^(?:makes|serves|servings|yield)\s*/i, ''));
+    servings = /^makes/i.test(yieldLine) ? ('Makes ' + split.servings) : split.servings;
+    i++;
+  } else return null;
+  const ingredients = [];
+  while (i < lines.length) {
+    const line = lines[i];
+    if (isQuantityStart(line) || isBareIngredient(line)) {
+      ingredients.push(line);
+      i++;
+      continue;
+    }
+    const prev = ingredients[ingredients.length - 1] || '';
+    if (ingredients.length && isContinuation(line) && !isStepStart(line)) {
+      ingredients[ingredients.length - 1] = joinWrap(prev, line);
+      i++;
+      continue;
+    }
+    break;
+  }
+  if (!ingredients.length) return null;
+  return {
+    name: tidyTitle(title),
+    servings,
+    ingredients,
+    instructions: groupParagraphs(lines.slice(i)),
+    cut: start
+  };
+}
 function isBareIngredient(line) {
   if (isStepStart(line) || /\.$/.test(line)) return false;
   if (line.length > 90) return false;
@@ -3621,7 +3678,7 @@ function parseCookbookPage(text) {
     break;
   }
   const intro = [];
-  while (idx < lines.length && !isQuantityStart(lines[idx]) && !isBareIngredient(lines[idx]) && !isStepStart(lines[idx])) {
+  while (idx < lines.length && !isQuantityStart(lines[idx]) && !isBareIngredient(lines[idx]) && !(isStepStart(lines[idx]) && !quantityAhead(lines, idx))) {
     intro.push(lines[idx++]);
   }
   const noteLines = [];
@@ -3657,7 +3714,19 @@ function parseCookbookPage(text) {
       idx++;
     }
   }
-  result.instructions = groupParagraphs(lines.slice(idx));
+  let stepLines = lines.slice(idx);
+  result.subRecipes = [];
+  for (let i = 1; i < stepLines.length; i++) {
+    const found = componentAt(stepLines, i);
+    if (!found) continue;
+    result.instructions = groupParagraphs(stepLines.slice(0, found.cut));
+    const sub = { name: found.name, ingredients: found.ingredients, instructions: found.instructions };
+    if (found.servings) sub.servings = found.servings;
+    result.subRecipes.push(sub);
+    stepLines = [];
+    break;
+  }
+  if (stepLines.length) result.instructions = groupParagraphs(stepLines);
   const noteParts = [];
   if (banners.length) noteParts.push(banners.map(b => sentenceCase(b)).join('. ') + '.');
   if (intro.length) noteParts.push(groupParagraphs(intro).join(' '));
@@ -3679,7 +3748,7 @@ function guessPhotoCategory(name, ingredients) {
     ['breakfast', /pancake|waffle|oatmeal|granola|french toast|breakfast/],
     ['dessert', /\bcake\b|cookie|brownie|ice cream|\bpie\b|dessert/],
     ['soupstew', /\bsoup\b|\bstew\b|\bchili\b/],
-    ['salads', /\bsalad\b/],
+    ['salads', /\bsalad\b|fris[eé]e/],
     ['pasta', /pasta|spaghetti|penne|noodle|lasagna|linguine|ravioli/],
     ['seafood', /salmon|shrimp|\bfish\b|\bcod\b|\btuna\b|crab|scallop|halibut|prawn/],
     ['porklamb', /\bpork\b|bacon|sausage|\bham\b|prosciutto/],
@@ -3801,6 +3870,13 @@ function showPhotoRecipeReview(parsed) {
         <textarea class="sync-input" id="photoRecipeSteps" rows="8" style="min-height:140px;">${escapeHtml((parsed.instructions || []).join('\n'))}</textarea>
         <div class="recipe-section-label">Notes</div>
         <textarea class="sync-input" id="photoRecipeNotes" rows="4" style="min-height:72px;">${escapeHtml(parsed.notes || '')}</textarea>
+        ${(parsed.subRecipes || []).map((sr, i) => `
+          <div class="recipe-section-label">${escapeHtml(sr.name || 'Part of this recipe')}${sr.servings ? ' · ' + escapeHtml(sr.servings) : ''}</div>
+          <input type="hidden" id="photoSubName${i}" value="${escapeHtml(sr.name || '')}">
+          <input type="hidden" id="photoSubServings${i}" value="${escapeHtml(sr.servings || '')}">
+          <textarea class="sync-input" id="photoSubIngredients${i}" rows="3" style="min-height:72px;">${escapeHtml((sr.ingredients || []).join('\n'))}</textarea>
+          <textarea class="sync-input" id="photoSubSteps${i}" rows="4" style="min-height:96px;">${escapeHtml((sr.instructions || []).join('\n'))}</textarea>
+        `).join('')}
       </div>
     </div>
     </div>
@@ -3845,6 +3921,18 @@ function savePhotoRecipe() {
   if (ingredients.length) dish.ingredients = ingredients;
   if (instructions.length) dish.instructions = instructions;
   if (notes) dish.notes = notes;
+  const subRecipes = [];
+  for (let i = 0; document.getElementById('photoSubName' + i); i++) {
+    const subName = document.getElementById('photoSubName' + i).value.trim();
+    const subServings = document.getElementById('photoSubServings' + i).value.trim();
+    const subIngredients = linesFromPaste(document.getElementById('photoSubIngredients' + i).value);
+    const subSteps = linesFromPaste(document.getElementById('photoSubSteps' + i).value);
+    if (!subName && !subIngredients.length && !subSteps.length) continue;
+    const sub = { name: subName, ingredients: subIngredients, instructions: subSteps };
+    if (subServings) sub.servings = subServings;
+    subRecipes.push(sub);
+  }
+  if (subRecipes.length) dish.subRecipes = subRecipes;
   const who = memberName();
   if (who) dish.addedBy = who;
   sec.dishes.push(dish);
@@ -6460,6 +6548,7 @@ function renderRecipeModal() {
       ${scaled.subRecipes.map(sr => `
         <div class="sub-recipe-view-block">
           <div class="sub-recipe-view-title">${icon('spoon')} ${escapeHtml(sr.name || 'Component')}</div>
+          ${sr.servings ? `<div class="picker-meta" style="margin-bottom:6px;">${escapeHtml(sr.servings)}</div>` : ''}
           ${sr.ingredients && sr.ingredients.length ? `
             <div class="recipe-section-label">Ingredients</div>
             <ul>${sr.ingredients.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul>` : ''}
