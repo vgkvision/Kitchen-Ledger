@@ -461,9 +461,35 @@
   .day-card-label { font-size: 0.68em; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); }
   .day-card-date { font-family: 'Inter', sans-serif; font-size: 1.2em; }
   .day-card-items { margin-top: auto; display: flex; flex-direction: column; gap: 3px; }
+  .day-card-dish, .month-cell-dish { display: flex; align-items: flex-start; gap: 2px; }
   .day-card-dish { font-size: 0.84em; line-height: 1.4; }
+  .menu-item-name, .menu-item-link { flex: 1; min-width: 0; }
   .menu-item-link { cursor: pointer; border-radius: 3px; transition: background 0.12s; }
   .menu-item-link:hover { background: var(--tint); }
+  .menu-drag-handle {
+    appearance: none; -webkit-appearance: none;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; margin: -6px 0 0 -6px; padding: 0;
+    border: none; border-radius: 6px; background: transparent; color: var(--ink-dim);
+    cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; flex-shrink: 0;
+  }
+  .menu-drag-handle:active { cursor: grabbing; background: var(--tint); }
+  .day-card-dish.is-dragging, .month-cell-dish.is-dragging { opacity: 0.35; }
+  .day-card.menu-drop, .month-cell.menu-drop {
+    border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); background: var(--tint);
+  }
+  .menu-drag-ghost {
+    position: fixed; z-index: 80; pointer-events: none;
+    transform: translate(-50%, calc(-100% - 14px));
+    max-width: 220px; padding: 8px 12px; border-radius: 8px;
+    background: var(--ink); color: var(--bg);
+    font-family: 'Inter', sans-serif; font-size: 0.85em; line-height: 1.3;
+    box-shadow: 0 8px 24px rgba(41,36,32,0.2);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  @media (min-width: 1101px) {
+    .week-grid .menu-drag-handle { width: 22px; height: 22px; margin: -2px 0 0 -2px; }
+  }
   .day-card-empty { font-size: 0.78em; color: #b8a99a; font-style: italic; margin-top: auto; }
   .vgk-game {
     margin-top: 6px; padding: 4px 6px; text-align: left;
@@ -1244,7 +1270,7 @@
   <div class="view active" id="view-menu">
     <div class="view-head">
       <h2>Menu Planner</h2>
-      <p>Plan dinners day by day, then step back and see the week or month at a glance.</p>
+      <p>Plan dinners day by day. To move one, hold the dots beside it and drag it onto the right day.</p>
     </div>
     <div id="backupReminder" class="backup-reminder" hidden>
       <p>Your cookbook lives on this phone. Save a backup so you have a copy.</p>
@@ -5257,6 +5283,115 @@ function menuItemColor(entry) {
 function dayItems(iso) {
   return menu[iso] || [];
 }
+function menuPlanRowHtml(it, iso, idx, compact) {
+  const label = menuItemLabel(it) || 'Dinner';
+  const handle = `<button type="button" class="menu-drag-handle" aria-label="Drag ${escapeHtml(label)} to another day" title="Drag to another day">${icon('grip', { size: compact ? 12 : 14, fill: 'currentColor' })}</button>`;
+  const byline = !compact && it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : '';
+  const name = it.custom
+    ? `<span class="menu-item-name">${escapeHtml(label)}${byline}</span>`
+    : `<span class="menu-item-link" data-section="${escapeHtml(it.sectionId || '')}" data-dish="${escapeHtml(it.dishName || '')}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(label)}${byline}</span>`;
+  return `<div class="${compact ? 'month-cell-dish' : 'day-card-dish'}" data-menu-day="${iso}" data-menu-index="${idx}" data-menu-label="${escapeHtml(label)}">${handle}${name}</div>`;
+}
+function moveMenuItem(fromIso, index, toIso) {
+  if (!fromIso || !toIso || fromIso === toIso) return false;
+  const from = (menu[fromIso] || []).slice();
+  if (index < 0 || index >= from.length) return false;
+  const [item] = from.splice(index, 1);
+  if (from.length) menu[fromIso] = from;
+  else delete menu[fromIso];
+  if (!menu[toIso]) menu[toIso] = [];
+  menu[toIso].push(item);
+  saveMenu();
+  const when = new Date(toIso + 'T00:00:00');
+  showToast('Moved to ' + when.toLocaleDateString('en-US', { weekday: 'long' }));
+  return true;
+}
+let menuDrag = null;
+let menuDragFrame = 0;
+function menuDragScroll(clientY) {
+  const edge = 80;
+  const maxStep = 16;
+  if (clientY < edge) window.scrollBy(0, -Math.ceil((edge - clientY) / edge * maxStep));
+  else if (clientY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((clientY - (window.innerHeight - edge)) / edge * maxStep));
+}
+function menuDragHighlight(clientX, clientY) {
+  if (!menuDrag) return null;
+  const el = document.elementFromPoint(clientX, clientY);
+  const day = el ? el.closest('[data-day]') : null;
+  const iso = day ? day.dataset.day : '';
+  document.querySelectorAll('.menu-drop').forEach(node => {
+    if (node !== day) node.classList.remove('menu-drop');
+  });
+  if (day && iso && iso !== menuDrag.fromIso) day.classList.add('menu-drop');
+  return iso || null;
+}
+function bindMenuItemDrag() {
+  document.querySelectorAll('.menu-drag-handle').forEach(handle => {
+    handle.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
+    handle.addEventListener('pointerdown', e => {
+      if (e.button != null && e.button !== 0) return;
+      const row = handle.closest('[data-menu-index]');
+      if (!row) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* already released */ }
+      const fromIso = row.dataset.menuDay;
+      const index = parseInt(row.dataset.menuIndex, 10);
+      const label = row.dataset.menuLabel || 'Dinner';
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const place = (x, y) => {
+        if (!menuDrag || !menuDrag.ghost) return;
+        menuDrag.ghost.style.left = x + 'px';
+        menuDrag.ghost.style.top = y + 'px';
+      };
+      const begin = () => {
+        if (menuDrag) return;
+        const ghost = document.createElement('div');
+        ghost.className = 'menu-drag-ghost';
+        ghost.textContent = label;
+        document.body.appendChild(ghost);
+        row.classList.add('is-dragging');
+        menuDrag = { fromIso, index, ghost, x: startX, y: startY };
+        place(startX, startY);
+        const tick = () => {
+          if (!menuDrag) return;
+          menuDragScroll(menuDrag.y);
+          menuDragHighlight(menuDrag.x, menuDrag.y);
+          menuDragFrame = requestAnimationFrame(tick);
+        };
+        menuDragFrame = requestAnimationFrame(tick);
+      };
+      const onMove = ev => {
+        if (Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+        begin();
+        if (!menuDrag) return;
+        ev.preventDefault();
+        menuDrag.x = ev.clientX;
+        menuDrag.y = ev.clientY;
+        place(ev.clientX, ev.clientY);
+        menuDragHighlight(ev.clientX, ev.clientY);
+      };
+      const onUp = ev => {
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        cancelAnimationFrame(menuDragFrame);
+        const drag = menuDrag;
+        const x = ev.clientX || (drag && drag.x) || 0;
+        const y = ev.clientY || (drag && drag.y) || 0;
+        if (drag && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
+        const toIso = drag ? menuDragHighlight(x, y) : null;
+        menuDrag = null;
+        document.querySelectorAll('.menu-drop, .is-dragging').forEach(node => node.classList.remove('menu-drop', 'is-dragging'));
+        if (drag && toIso && toIso !== drag.fromIso) moveMenuItem(drag.fromIso, drag.index, toIso);
+      };
+      document.addEventListener('pointermove', onMove, { passive: false });
+      document.addEventListener('pointerup', onUp);
+      document.addEventListener('pointercancel', onUp);
+    });
+  });
+}
 
 function renderTryView() {
   const area = document.getElementById('tryListArea');
@@ -5579,10 +5714,7 @@ function renderMenuView() {
           ${vgkGameHtml(iso)}
           ${leftoverHtml(iso)}
           ${items.length
-            ? `<div class="day-card-items">${items.map(it => it.custom
-                ? `<div class="day-card-dish">${escapeHtml(menuItemLabel(it))}${it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : ''}</div>`
-                : `<div class="day-card-dish menu-item-link" data-section="${it.sectionId}" data-dish="${escapeHtml(it.dishName)}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(menuItemLabel(it))}${it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : ''}</div>`
-              ).join('')}</div>`
+            ? `<div class="day-card-items">${items.map((it, idx) => menuPlanRowHtml(it, iso, idx, false)).join('')}</div>`
             : `<div class="day-card-empty">+ Plan dinner</div>`}
         </div>`;
     }).join('');
@@ -5603,10 +5735,7 @@ function renderMenuView() {
           <div class="month-cell-date">${d.getDate()}</div>
           ${vgkGameHtml(iso)}
           ${leftoverHtml(iso)}
-          ${shown.map(it => it.custom
-            ? `<div class="month-cell-dish">${escapeHtml(menuItemLabel(it))}</div>`
-            : `<div class="month-cell-dish menu-item-link" data-section="${it.sectionId}" data-dish="${escapeHtml(it.dishName)}" title="View recipe"><span class="day-card-tag" style="background:${menuItemColor(it)}"></span>${escapeHtml(menuItemLabel(it))}</div>`
-          ).join('')}
+          ${shown.map((it, idx) => menuPlanRowHtml(it, iso, idx, true)).join('')}
           ${extra > 0 ? `<div class="month-cell-dish" style="opacity:0.65;">+${extra} more</div>` : ''}
         </div>`;
     }).join('');
@@ -5628,6 +5757,7 @@ function renderMenuView() {
     grid.querySelectorAll('[data-day]').forEach(cell => {
       cell.addEventListener('click', () => openDayEditor(cell.dataset.day));
     });
+    bindMenuItemDrag();
 
   const banner = document.getElementById('tonightBanner');
   if (banner) {
@@ -7724,7 +7854,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. Hold the dots beside a planned dinner and drag it to another day when you cook it on a different night. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
