@@ -97,6 +97,8 @@
     font-family: 'Inter', sans-serif; font-size: 0.72em; color: var(--ink-dim); background: none;
     border: 1px solid var(--hairline); border-radius: 0; padding: 7px 15px; letter-spacing: 0.08em; text-transform: uppercase;
   }
+  button.stat-badge { cursor: pointer; }
+  button.stat-badge:hover, button.stat-badge:focus-visible { color: var(--ink); border-color: var(--ink); }
 
   .legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 20px; margin-top: 0; padding: 0 140px; }
   body.shopping-view-active .legend { display: none; }
@@ -478,6 +480,8 @@
   .day-card.menu-drop, .month-cell.menu-drop {
     border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); background: var(--tint);
   }
+  .day-card-dish.menu-drop-before, .month-cell-dish.menu-drop-before, .day-item-row.menu-drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .day-card-dish.menu-drop-after, .month-cell-dish.menu-drop-after, .day-item-row.menu-drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
   .menu-drag-ghost {
     position: fixed; z-index: 80; pointer-events: none;
     transform: translate(-50%, calc(-100% - 14px));
@@ -577,6 +581,8 @@
   }
   .day-item-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; text-align: left; }
   .day-item-row { display: flex; align-items: center; gap: 8px; background: var(--tint); border: 1px solid var(--hairline); border-radius: 6px; padding: 9px 10px; }
+  .day-item-row .menu-drag-handle { width: 32px; height: 32px; margin: 0; }
+  .day-item-row.is-dragging { opacity: 0.35; }
   .day-item-servings { display: inline-flex; align-items: center; gap: 5px; font-size: 0.85em; color: var(--ink-dim); flex-shrink: 0; }
   .day-item-label { flex: 1; font-size: 0.85em; }
   .day-item-remove { background: none; border: none; color: var(--ink-dim); font-size: 1.15em; line-height: 1; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
@@ -1270,7 +1276,7 @@
   <div class="view active" id="view-menu">
     <div class="view-head">
       <h2>Menu Planner</h2>
-      <p>Plan dinners day by day. To move one, hold the dots beside it and drag it onto the right day.</p>
+      <p>Hold the dots beside a dinner and drag it to another day, or up and down to change the order on that day.</p>
     </div>
     <div id="backupReminder" class="backup-reminder" hidden>
       <p>Your cookbook lives on this phone. Save a backup so you have a copy.</p>
@@ -1865,7 +1871,14 @@ function saveMenu() {
   }
   renderMenuView();
   renderShoppingView();
+  updateTonightBadge();
   schedulePush();
+}
+function updateTonightBadge() {
+  const el = document.getElementById('plannedTonightBadge');
+  if (!el || typeof dayItems !== 'function') return;
+  const n = dayItems(isoOf(new Date())).length;
+  el.textContent = n ? n + ' planned tonight' : 'Tonight still open';
 }
 
 function loadCookbooks() {
@@ -2102,8 +2115,10 @@ function render() {
   document.getElementById('statBadges').innerHTML =
     `<span class="stat-badge">${totalDishes} Dishes</span>` +
     `<span class="stat-badge">${withRecipes} Recipe${withRecipes === 1 ? '' : 's'}</span>` +
-    `<span class="stat-badge">${tonightCount ? tonightCount + ' planned tonight' : 'Tonight still open'}</span>` +
+    `<button type="button" class="stat-badge" id="plannedTonightBadge" title="See what is planned tonight">${tonightCount ? tonightCount + ' planned tonight' : 'Tonight still open'}</button>` +
     (tryList.length ? `<span class="stat-badge">${tryList.length} to try</span>` : '');
+  const plannedTonight = document.getElementById('plannedTonightBadge');
+  if (plannedTonight) plannedTonight.addEventListener('click', showTonightPlan);
   updateTryTabLabel();
   document.getElementById('footerCount').textContent =
     totalDishes + ' dishes · ' + sections.length + ' sections · color-coded by protein';
@@ -5226,6 +5241,17 @@ function wireSyncModal() {
 // ---------------------------------------------------------------
 // Tab / view switching
 // ---------------------------------------------------------------
+function showTonightPlan() {
+  menuAnchor = new Date();
+  menuMode = 'week';
+  const weekBtn = document.getElementById('modeWeekBtn');
+  const monthBtn = document.getElementById('modeMonthBtn');
+  if (weekBtn) weekBtn.classList.add('active');
+  if (monthBtn) monthBtn.classList.remove('active');
+  if (activeView !== 'menu') switchView('menu');
+  else renderMenuView();
+  openDayEditor(isoOf(new Date()));
+}
 function switchView(view) {
   activeView = view;
   ['recipes','menu','rotation','suggestions','shopping','insights','try'].forEach(v => {
@@ -5349,7 +5375,7 @@ function dayItems(iso) {
 }
 function menuPlanRowHtml(it, iso, idx, compact) {
   const label = menuItemLabel(it) || 'Dinner';
-  const handle = `<button type="button" class="menu-drag-handle" aria-label="Drag ${escapeHtml(label)} to another day" title="Drag to another day">${icon('grip', { size: compact ? 12 : 14, fill: 'currentColor' })}</button>`;
+  const handle = `<button type="button" class="menu-drag-handle" aria-label="Drag ${escapeHtml(label)}" title="Drag to move">${icon('grip', { size: compact ? 12 : 14, fill: 'currentColor' })}</button>`;
   const byline = !compact && it.plannedBy ? `<span class="byline">${escapeHtml(it.plannedBy)}</span>` : '';
   const name = it.custom
     ? `<span class="menu-item-name">${escapeHtml(label)}${byline}</span>`
@@ -5370,6 +5396,22 @@ function moveMenuItem(fromIso, index, toIso) {
   showToast('Moved to ' + when.toLocaleDateString('en-US', { weekday: 'long' }));
   return true;
 }
+function reorderMenuItem(iso, fromIndex, beforeIndex) {
+  const list = (menu[iso] || []).slice();
+  if (fromIndex < 0 || fromIndex >= list.length) return false;
+  const [item] = list.splice(fromIndex, 1);
+  let dest = beforeIndex;
+  if (fromIndex < dest) dest -= 1;
+  if (dest < 0) dest = 0;
+  if (dest > list.length) dest = list.length;
+  if (dest === fromIndex) return false;
+  list.splice(dest, 0, item);
+  menu[iso] = list;
+  saveMenu();
+  if (document.getElementById('dayEditorOverlay').classList.contains('show') && dayEditorIso === iso) renderDayEditor();
+  showToast('Order updated');
+  return true;
+}
 let menuDrag = null;
 let menuDragFrame = 0;
 function menuDragScroll(clientY) {
@@ -5378,19 +5420,32 @@ function menuDragScroll(clientY) {
   if (clientY < edge) window.scrollBy(0, -Math.ceil((edge - clientY) / edge * maxStep));
   else if (clientY > window.innerHeight - edge) window.scrollBy(0, Math.ceil((clientY - (window.innerHeight - edge)) / edge * maxStep));
 }
-function menuDragHighlight(clientX, clientY) {
+function menuDragTarget(clientX, clientY) {
   if (!menuDrag) return null;
   const el = document.elementFromPoint(clientX, clientY);
+  const row = el ? el.closest('[data-menu-index]') : null;
   const day = el ? el.closest('[data-day]') : null;
-  const iso = day ? day.dataset.day : '';
-  document.querySelectorAll('.menu-drop').forEach(node => {
-    if (node !== day) node.classList.remove('menu-drop');
+  document.querySelectorAll('.menu-drop, .menu-drop-before, .menu-drop-after').forEach(node => {
+    node.classList.remove('menu-drop', 'menu-drop-before', 'menu-drop-after');
   });
-  if (day && iso && iso !== menuDrag.fromIso) day.classList.add('menu-drop');
-  return iso || null;
+  const iso = row && row.dataset.menuDay ? row.dataset.menuDay : (day ? day.dataset.day : '');
+  if (!iso) return null;
+  if (iso === menuDrag.fromIso && row) {
+    const idx = parseInt(row.dataset.menuIndex, 10);
+    if (idx === menuDrag.index) return { iso, before: idx };
+    const rect = row.getBoundingClientRect();
+    const after = clientY > rect.top + rect.height / 2;
+    row.classList.add(after ? 'menu-drop-after' : 'menu-drop-before');
+    return { iso, before: after ? idx + 1 : idx };
+  }
+  if (iso !== menuDrag.fromIso && day) {
+    day.classList.add('menu-drop');
+    return { iso, before: -1 };
+  }
+  return null;
 }
-function bindMenuItemDrag() {
-  document.querySelectorAll('.menu-drag-handle').forEach(handle => {
+function bindMenuItemDrag(root) {
+  (root || document).querySelectorAll('.menu-drag-handle').forEach(handle => {
     handle.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); });
     handle.addEventListener('pointerdown', e => {
       if (e.button != null && e.button !== 0) return;
@@ -5421,7 +5476,7 @@ function bindMenuItemDrag() {
         const tick = () => {
           if (!menuDrag) return;
           menuDragScroll(menuDrag.y);
-          menuDragHighlight(menuDrag.x, menuDrag.y);
+          menuDragTarget(menuDrag.x, menuDrag.y);
           menuDragFrame = requestAnimationFrame(tick);
         };
         menuDragFrame = requestAnimationFrame(tick);
@@ -5434,7 +5489,7 @@ function bindMenuItemDrag() {
         menuDrag.x = ev.clientX;
         menuDrag.y = ev.clientY;
         place(ev.clientX, ev.clientY);
-        menuDragHighlight(ev.clientX, ev.clientY);
+        menuDragTarget(ev.clientX, ev.clientY);
       };
       const onUp = ev => {
         document.removeEventListener('pointermove', onMove);
@@ -5445,10 +5500,14 @@ function bindMenuItemDrag() {
         const x = ev.clientX || (drag && drag.x) || 0;
         const y = ev.clientY || (drag && drag.y) || 0;
         if (drag && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
-        const toIso = drag ? menuDragHighlight(x, y) : null;
+        const target = drag ? menuDragTarget(x, y) : null;
         menuDrag = null;
-        document.querySelectorAll('.menu-drop, .is-dragging').forEach(node => node.classList.remove('menu-drop', 'is-dragging'));
-        if (drag && toIso && toIso !== drag.fromIso) moveMenuItem(drag.fromIso, drag.index, toIso);
+        document.querySelectorAll('.menu-drop, .menu-drop-before, .menu-drop-after, .is-dragging').forEach(node => {
+          node.classList.remove('menu-drop', 'menu-drop-before', 'menu-drop-after', 'is-dragging');
+        });
+        if (!drag || !target) return;
+        if (target.iso !== drag.fromIso) moveMenuItem(drag.fromIso, drag.index, target.iso);
+        else reorderMenuItem(drag.fromIso, drag.index, target.before);
       };
       document.addEventListener('pointermove', onMove, { passive: false });
       document.addEventListener('pointerup', onUp);
@@ -5821,7 +5880,7 @@ function renderMenuView() {
     grid.querySelectorAll('[data-day]').forEach(cell => {
       cell.addEventListener('click', () => openDayEditor(cell.dataset.day));
     });
-    bindMenuItemDrag();
+    bindMenuItemDrag(grid);
 
   const banner = document.getElementById('tonightBanner');
   if (banner) {
@@ -6434,14 +6493,17 @@ function renderDayEditor() {
   modal.innerHTML = `
     <div class="picker-eyebrow">${escapeHtml(dateLabel)}</div>
     ${items.length ? `
+      ${items.length > 1 ? '<p class="sync-step" style="margin:0 0 8px;">Hold the dots to change the order.</p>' : ''}
       <div class="day-item-list">
         ${items.map((it, idx) => {
           const found = it.custom ? null : dishLookup(it.sectionId, it.dishName);
           const base = found ? baseServingsNumber(found.dish) : null;
+          const label = menuItemLabel(it);
           return `
-          <div class="day-item-row">
+          <div class="day-item-row" data-menu-day="${dayEditorIso}" data-menu-index="${idx}" data-menu-label="${escapeHtml(label)}">
+            <button type="button" class="menu-drag-handle" aria-label="Drag ${escapeHtml(label)}" title="Drag to change the order">${icon('grip', { size: 14, fill: 'currentColor' })}</button>
             <span class="day-card-tag" style="background:${menuItemColor(it)}"></span>
-            <span class="day-item-label">${escapeHtml(menuItemLabel(it))}${it.leftover ? ' <span class="leftover-note">Leftovers</span>' : ''}</span>
+            <span class="day-item-label">${escapeHtml(label)}${it.leftover ? ' <span class="leftover-note">Leftovers</span>' : ''}</span>
             ${base != null ? `
               <span class="day-item-servings">
                 <button type="button" class="scale-step-btn" data-servings-down="${idx}" aria-label="Fewer servings">−</button>
@@ -6514,6 +6576,7 @@ function renderDayEditor() {
       renderDayEditor();
     });
   });
+  bindMenuItemDrag(modal);
   document.getElementById('dayEditorAddCustom').addEventListener('click', () => {
     const input = document.getElementById('dayEditorCustom');
     const val = input.value.trim();
@@ -7918,7 +7981,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. Hold the dots beside a planned dinner and drag it to another day when you cook it on a different night. A photo that splits one step across two numbered lines is joined back into a single step, including a recipe already saved. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. Hold the dots beside a planned dinner and drag it to another day when you cook it on a different night. Drag those same dots up or down to change the order on one day. Tap the Planned tonight count at the top to open that night’s dishes. A photo that splits one step across two numbered lines is joined back into a single step, including a recipe already saved. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
