@@ -1831,6 +1831,45 @@ function loadMenu() {
   return {};
 }
 
+// Each day remembers when this device last changed it. A phone that still
+// has the old order must not upload that order over a newer one.
+const MENU_STAMPS_KEY = 'weeknight-plus-menu-stamps-v1';
+let menuStamps = {};
+let menuBaseline = null;
+function loadMenuStamps() {
+  try {
+    const raw = localStorage.getItem(MENU_STAMPS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch (e) { return {}; }
+}
+function saveMenuStamps() {
+  try { localStorage.setItem(MENU_STAMPS_KEY, JSON.stringify(menuStamps)); } catch (e) { /* ignore */ }
+}
+function menuDayJson(day) {
+  if (!Array.isArray(day) || !day.length) return '';
+  return JSON.stringify(day);
+}
+function stampMenuChanges(before, after) {
+  const keys = new Set([...Object.keys(before || {}), ...Object.keys(after || {})]);
+  const now = Date.now();
+  let changed = false;
+  keys.forEach(iso => {
+    if (menuDayJson(before && before[iso]) === menuDayJson(after && after[iso])) return;
+    menuStamps[iso] = now;
+    changed = true;
+  });
+  if (changed) saveMenuStamps();
+  return changed;
+}
+function rememberMenuBaseline() {
+  try { menuBaseline = JSON.parse(JSON.stringify(menu)); }
+  catch (e) { menuBaseline = {}; }
+}
+function isHandheldDevice() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+}
+
 // Keeps "Last made" in sync with the Menu Planner: whenever a dish is
 // planned for today or an earlier date, that counts as having made it.
 // Only ever moves the date forward — a manually-set date that's already
@@ -1861,6 +1900,8 @@ function syncLastMadeFromMenu() {
 }
 
 function saveMenu() {
+  stampMenuChanges(menuBaseline || {}, menu);
+  rememberMenuBaseline();
   try {
     localStorage.setItem(MENU_KEY, JSON.stringify(menu));
   } catch (e) { /* ignore */ }
@@ -4580,6 +4621,8 @@ function closePicker() {
 // ---------------------------------------------------------------
 const SYNC_KEY_STORAGE = 'weeknight-plus-sync-key';
 const SYNC_BIN_STORAGE = 'weeknight-plus-sync-bin';
+const SYNC_META_BIN_KEY = 'weeknight-plus-sync-meta-bin';
+const MENU_STAMP_PUBLISH_KEY = 'weeknight-plus-menu-stamp-publish-v1';
 let syncPushTimer = null;
 
 function getSyncCreds() {
@@ -4673,7 +4716,7 @@ function snapshotLocalState() {
     localStorage.setItem(UNDO_SYNC_KEY, JSON.stringify({
       kind: 'kitchen-ledger-undo-sync',
       savedAt: new Date().toISOString(),
-      sections, menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList,
+      sections, menu, menuStamps, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList,
     }));
   } catch (e) { /* quota — skip snapshot rather than blocking the pull */ }
 }
@@ -4828,8 +4871,66 @@ function dishForCloud(d) {
   return copy;
 }
 
+function stampNumber(stamps, iso) {
+  const n = Number(stamps && stamps[iso]);
+  return Number.isFinite(n) ? n : 0;
+}
+// Newer edit of a day wins. A day only one device has is kept. When neither
+// side has a time, preferLocal keeps this device's copy (an edit that has
+// not been saved yet) and a pull takes the family copy.
+function mergeMenuDays(localMenu, localStamps, cloudMenu, cloudStamps, opts) {
+  const preferLocal = !!(opts && opts.preferLocal);
+  const local = {};
+  const cloud = {};
+  Object.keys(localMenu || {}).forEach(iso => { local[iso] = localMenu[iso]; });
+  Object.keys(cloudMenu || {}).forEach(iso => { cloud[iso] = cloudMenu[iso]; });
+  migrateMenuFormat(local);
+  migrateMenuFormat(cloud);
+  const keys = new Set([
+    ...Object.keys(local), ...Object.keys(cloud),
+    ...Object.keys(localStamps || {}), ...Object.keys(cloudStamps || {}),
+  ]);
+  const menuOut = {};
+  const stampsOut = {};
+  let tookCloud = false;
+  let keptLocal = false;
+  keys.forEach(iso => {
+    const localDay = local[iso];
+    const cloudDay = cloud[iso];
+    const same = menuDayJson(localDay) === menuDayJson(cloudDay);
+    const ls = stampNumber(localStamps, iso);
+    const cs = stampNumber(cloudStamps, iso);
+    let useLocal = true;
+    if (ls > cs) useLocal = true;
+    else if (cs > ls) useLocal = false;
+    else if (same) useLocal = true;
+    else useLocal = preferLocal;
+    const chosen = useLocal ? localDay : cloudDay;
+    const chosenStamp = useLocal ? ls : cs;
+    if (Array.isArray(chosen) && chosen.length) menuOut[iso] = chosen;
+    if (chosenStamp) stampsOut[iso] = chosenStamp;
+    if (!same) {
+      if (useLocal) keptLocal = true;
+      else tookCloud = true;
+    }
+  });
+  return { menu: menuOut, stamps: stampsOut, tookCloud, keptLocal };
+}
+function adoptMenu(nextMenu, nextStamps) {
+  menu = nextMenu || {};
+  migrateMenuFormat(menu);
+  menuStamps = nextStamps || {};
+  saveMenuStamps();
+  rememberMenuBaseline();
+  try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
+  if (typeof renderMenuView === 'function') renderMenuView();
+  if (typeof renderShoppingView === 'function') renderShoppingView();
+  if (typeof updateTonightBadge === 'function') updateTonightBadge();
+  const editor = document.getElementById('dayEditorOverlay');
+  if (editor && editor.classList.contains('show') && dayEditorIso && typeof renderDayEditor === 'function') renderDayEditor();
+}
 function cloudMeta() {
-  return { menu, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList };
+  return { menu, menuStamps, cookbooks: knownCookbooks, shoppingList, categoryOverrides, tryList };
 }
 function menuHasPlans(candidate) {
   if (!candidate || typeof candidate !== 'object') return false;
@@ -4855,20 +4956,25 @@ async function syncPush() {
     // that is already saved.
     let metaPayload = cloudMeta();
     let skipMetaWrite = false;
-    if (!menuHasPlans(metaPayload.menu) && manifest.metaBinId) {
-      let existingMeta = null;
+    let existingMeta = null;
+    if (manifest.metaBinId) {
       try { existingMeta = await jsonbinFetch(apiKey, manifest.metaBinId); }
-      catch (e) { existingMeta = null; }
-      if (existingMeta && menuHasPlans(existingMeta.menu)) {
-        metaPayload = Object.assign({}, metaPayload, { menu: existingMeta.menu });
-        menu = existingMeta.menu;
-        migrateMenuFormat(menu);
-        try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
-        renderMenuView();
-        renderShoppingView();
-      } else if (!existingMeta) {
-        skipMetaWrite = true;
+      catch (e) {
+        lastSyncPushError = describeSyncFailure(e && e.status, null);
+        indicator.textContent = lastSyncPushError;
+        return;
       }
+      try { localStorage.setItem(SYNC_META_BIN_KEY, manifest.metaBinId); } catch (e) { /* ignore */ }
+    }
+    if (!menuHasPlans(metaPayload.menu) && existingMeta && menuHasPlans(existingMeta.menu)) {
+      adoptMenu(existingMeta.menu || {}, existingMeta.menuStamps || {});
+      metaPayload = cloudMeta();
+    } else if (existingMeta) {
+      const merged = mergeMenuDays(menu, menuStamps, existingMeta.menu || {}, existingMeta.menuStamps || {}, { preferLocal: true });
+      adoptMenu(merged.menu, merged.stamps);
+      metaPayload = cloudMeta();
+    } else if (manifest.metaBinId && !existingMeta) {
+      skipMetaWrite = true;
     }
     if (!skipMetaWrite) {
       const metaKB = payloadSizeKB(metaPayload);
@@ -4931,10 +5037,21 @@ function applyExternalData(data, opts = {}) {
   harvestLocalPhotos(sections);
   sections = data.sections || [];
   const incomingMenu = data.menu || {};
-  if (opts.preserveLocalMenu && !menuHasPlans(incomingMenu) && menuHasPlans(menu)) {
+  if (opts.mergeMenu) {
+    const merged = mergeMenuDays(menu, menuStamps, incomingMenu, data.menuStamps || {}, { preferLocal: !!opts.preferLocalMenu || hasPendingPush() });
+    menu = merged.menu;
+    menuStamps = merged.stamps;
+    if (merged.keptLocal) markPushPending();
+  } else if (opts.preserveLocalMenu && !menuHasPlans(incomingMenu) && menuHasPlans(menu)) {
     markPushPending();
   } else {
     menu = incomingMenu;
+    if (data.menuStamps && typeof data.menuStamps === 'object') menuStamps = data.menuStamps;
+    else {
+      const now = Date.now();
+      menuStamps = {};
+      Object.keys(menu || {}).forEach(iso => { if (menuDayJson(menu[iso])) menuStamps[iso] = now; });
+    }
   }
   knownCookbooks = data.cookbooks || [];
   shoppingList = data.shoppingList || [];
@@ -4957,14 +5074,18 @@ function applyExternalData(data, opts = {}) {
   migrateSectionColors(sections);
   migrateWineDefaults(sections);
   migrateMenuFormat(menu);
+  const menuBeforeRepair = JSON.parse(JSON.stringify(menu));
   if (repairSavedTitles(sections, menu)) markPushPending();
   if (repairWrappedSteps(sections)) markPushPending();
+  stampMenuChanges(menuBeforeRepair, menu);
   syncKnownCookbooksFromDishes();
   migrateItemCategoriesToGlobal();
   syncLastMadeFromMenu();
   harvestLocalPhotos(sections);
   attachLocalPhotos(sections);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sections));
+  saveMenuStamps();
+  rememberMenuBaseline();
   localStorage.setItem(MENU_KEY, JSON.stringify(menu));
   localStorage.setItem(COOKBOOKS_KEY, JSON.stringify(knownCookbooks));
   localStorage.setItem(SHOPPING_KEY, JSON.stringify(shoppingList));
@@ -4982,11 +5103,11 @@ async function syncPull() {
     // Backward compatibility with the original single-bin format.
     if (Array.isArray(manifest)) {
       recordSyncSuccess(); updateSyncBtn(); lastSyncPullError = null;
-      return { sections: manifest, menu: {}, cookbooks: [], shoppingList: [], categoryOverrides: {} };
+      return { sections: manifest, menu: {}, menuStamps: {}, cookbooks: [], shoppingList: [], categoryOverrides: {} };
     }
     if (manifest.sections && !manifest.categoryBins && !manifest.groupBins) {
       recordSyncSuccess(); updateSyncBtn(); lastSyncPullError = null;
-      return { sections: manifest.sections || [], menu: manifest.menu || {}, cookbooks: manifest.cookbooks || [], shoppingList: manifest.shoppingList || [], categoryOverrides: manifest.categoryOverrides || {} };
+      return { sections: manifest.sections || [], menu: manifest.menu || {}, menuStamps: manifest.menuStamps || {}, cookbooks: manifest.cookbooks || [], shoppingList: manifest.shoppingList || [], categoryOverrides: manifest.categoryOverrides || {} };
     }
     // Backward compatibility with the older one-bin-per-category format —
     // reads it correctly; the next successful push upgrades it to groups.
@@ -5003,6 +5124,7 @@ async function syncPull() {
       return {
         sections: pulledSections,
         menu: (meta && meta.menu) || {},
+        menuStamps: (meta && meta.menuStamps) || {},
         cookbooks: (meta && meta.cookbooks) || [],
         shoppingList: (meta && meta.shoppingList) || [],
         categoryOverrides: (meta && meta.categoryOverrides) || {},
@@ -5017,6 +5139,9 @@ async function syncPull() {
       await sleep(120);
     }
     reorderSections(pulledSections);
+    if (manifest.metaBinId) {
+      try { localStorage.setItem(SYNC_META_BIN_KEY, manifest.metaBinId); } catch (e) { /* ignore */ }
+    }
     const meta = manifest.metaBinId ? await jsonbinFetch(apiKey, manifest.metaBinId) : {};
 
     recordSyncSuccess();
@@ -5025,6 +5150,7 @@ async function syncPull() {
     return {
       sections: pulledSections,
       menu: (meta && meta.menu) || {},
+      menuStamps: (meta && meta.menuStamps) || {},
       cookbooks: (meta && meta.cookbooks) || [],
       shoppingList: (meta && meta.shoppingList) || [],
       categoryOverrides: (meta && meta.categoryOverrides) || {},
@@ -5079,7 +5205,7 @@ function renderSyncModal(status, activeTab) {
       <div class="sync-status">Sync code:</div>
       <div class="sync-code-box"><span class="sync-code">${escapeHtml(binId)}</span><button class="sync-copy-btn" data-action="copy-code">Copy</button></div>
       ${lastSyncedLabel() ? `<div class="sync-status">${escapeHtml(lastSyncedLabel())}</div>` : ''}
-      <div class="sync-step">If this screen’s week is empty, Sync now brings in the week from the phone. It will not erase dinners that are already saved.</div>
+      <div class="sync-step">If this screen’s week is empty, Sync now brings in the week from the phone. It will not erase dinners that are already saved. While Plus is open, a change on one screen shows on the other in a few seconds. Open the phone after the computer, so the phone picks up the latest order.</div>
       ${syncSizeIndicatorHtml()}
       ${status ? `<div class="sync-status">${escapeHtml(status)}</div>` : ''}
       <div class="sync-step" style="margin-top:18px;">Keep a local copy of everything, independent of family sharing — useful if you're ever switching devices or just want peace of mind.</div>
@@ -5157,28 +5283,8 @@ function wireSyncModal() {
   }));
   overlay.querySelectorAll('[data-action="sync-now"]').forEach(b => b.addEventListener('click', async () => {
     renderSyncModal('Syncing…');
-    // An empty week must download the family's dinners, not upload the
-    // blank week over them. A screen that already has dinners sends those
-    // up first so a pull cannot wipe them.
-    if (!menuHasPlans(menu)) {
-      const cloud = await syncPull();
-      if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
-      if (menuHasPlans(menu)) clearPushPending();
-      renderSyncModal(menuHasPlans(menu) ? 'Up to date.' : (lastSyncPullError || 'The week on the phone has not arrived yet. Leave the phone open on Plus, then try Sync now again.'));
-      return;
-    }
-    if (hasPendingPush()) {
-      await syncPush();
-      if (hasPendingPush()) {
-        renderSyncModal((lastSyncPushError || 'Could not save your latest changes to the cloud') + ' — try again once this is resolved, before syncing further.');
-        return;
-      }
-    }
-    const cloud = await syncPull();
-    const pullFailed = !cloud;
-    if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
-    await syncPush();
-    renderSyncModal(pullFailed ? (lastSyncPullError || 'Could not reach the cloud — check your connection.') : 'Up to date.');
+    const status = await syncWithFamily();
+    renderSyncModal(status);
   }));
   overlay.querySelectorAll('[data-action="sync-disconnect"]').forEach(b => b.addEventListener('click', () => {
     localStorage.removeItem(SYNC_KEY_STORAGE);
@@ -5225,7 +5331,7 @@ function wireSyncModal() {
     }
     const cloud = await syncPull();
     if (cloud) {
-      applyExternalData(cloud, { preserveLocalMenu: true });
+      applyExternalData(cloud, { mergeMenu: true });
       if (!hasPendingPush()) clearPushPending();
       updateSyncBtn();
       renderSyncModal();
@@ -7981,7 +8087,7 @@ function openHelpModal() {
       <p>"Share with family" syncs your recipes, menu, cookbooks, shopping list, and Want to try shelf. Photos you add on a phone stay on that phone during this beta, so a big picture cannot push the family share over its size limit. Put your name in the banner at the top and new dishes, menu days, and shopping items will say who added them.</p>
 
       <div class="help-section-title">What's new in this beta</div>
-      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. Hold the dots beside a planned dinner and drag it to another day when you cook it on a different night. Drag those same dots up or down to change the order on one day. Tap the Planned tonight count at the top to open that night’s dishes. A photo that splits one step across two numbered lines is joined back into a single step, including a recipe already saved. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
+      <p>Plus opens on <strong>Tonight</strong>, with Cook this and Shopping list on that card. <strong>Aa</strong> beside the moon turns on Easy reading for the week, the recipes, and the list, and that choice stays on this phone. <strong>Fridge sheet</strong> prints the week in large type. Store mode keeps the screen awake while you shop. <strong>Add from a photo</strong> on Recipes lets you choose a picture of the page. Plus fills in the dish and keeps the page on the screen so you can check the amounts. Tap Make the page bigger if a fraction is hard to read, then tap Add this recipe. The page does not need the words Ingredients or Instructions. Golden Knights home games at T-Mobile Arena show on the menu calendar, so those nights are marked before you plan dinner. <strong>Repeat a past week</strong> and <strong>Fill open days with favorites</strong> leave those home-game nights open. <strong>Leftovers tomorrow</strong> copies tonight’s dinner onto the next night without adding those ingredients to the shopping list again. Hold the dots beside a planned dinner and drag it to another day when you cook it on a different night. Drag those same dots up or down to change the order on one day. Tap the Planned tonight count at the top to open that night’s dishes. The phone picks up that order when you open Plus. If Plus is already open, the order shows up within a few seconds. An older list on the phone is not sent back over the change you just made. A photo that splits one step across two numbered lines is joined back into a single step, including a recipe already saved. A quiet note asks you to save a backup of the cookbook; Not now hides it for two weeks.</p>
       <p><strong>Want to try</strong> holds a dish name, a link, and why it might fit — it does not copy the recipe off the website. <strong>Repeat a past week</strong> copies an earlier menu onto the week you're looking at. <strong>Fill open days with favorites</strong> uses hearted dishes and dishes marked Jeff likes, and leaves days that already have a plan alone. <strong>Store mode</strong> is the large-type grocery view. Your name stamps new changes. Uploaded photos stay on the device that added them.</p>
       <p>A short picture guide for this beta is here: <a href="beta-guide.html">Plus beta notes</a>.</p>
       <p>Plus also keeps the quieter header, the Tonight card, “Add all to list,” phone-visible dish actions, and undo for the last sync on this device. Cooking Mode stays open if you tap the dimmed background or press Escape.</p>
@@ -8646,8 +8752,13 @@ document.getElementById('backupRestoreInput').addEventListener('change', () => {
 });
 menu = loadMenu();
 migrateMenuFormat(menu);
+menuStamps = loadMenuStamps();
+const menuBeforeRepair = JSON.parse(JSON.stringify(menu));
 if (repairSavedTitles(sections, menu)) markPushPending();
 if (repairWrappedSteps(sections)) markPushPending();
+stampMenuChanges(menuBeforeRepair, menu);
+rememberMenuBaseline();
+publishDesktopMenuOnce();
 try { localStorage.setItem(MENU_KEY, JSON.stringify(menu)); } catch (e) { /* ignore */ }
 try { localStorage.setItem(STORAGE_KEY, JSON.stringify(sections)); } catch (e) { /* ignore */ }
 if (syncLastMadeFromMenu()) {
@@ -8664,45 +8775,112 @@ if (migrateItemCategoriesToGlobal()) {
 try { localStorage.setItem(CATEGORY_OVERRIDES_KEY, JSON.stringify(categoryOverrides)); } catch (e) { /* ignore */ }
 render();
 updateSyncBtn();
-// Shared by both the initial launch and the new "check when you come back
-// to the app" feature below — always pushes any unsaved local change first,
-// and only pulls if that's confirmed safe, same protection as everywhere else.
-async function safeSyncCheck() {
-  if (!isSyncConnected()) return;
-  if (!menuHasPlans(menu)) {
-    const cloud = await syncPull();
-    if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
-    if (menuHasPlans(menu)) clearPushPending();
-    return;
-  }
-  if (hasPendingPush() || menuHasPlans(menu)) {
+// The Mac where the order is already right sends that week once, so the
+// phone can download it. A phone does not send its older copy back.
+function publishDesktopMenuOnce() {
+  if (isHandheldDevice()) return;
+  try {
+    if (localStorage.getItem(MENU_STAMP_PUBLISH_KEY) === '1') return;
+    localStorage.setItem(MENU_STAMP_PUBLISH_KEY, '1');
+  } catch (e) { return; }
+  if (!menuHasPlans(menu)) return;
+  const now = Date.now();
+  let stamped = false;
+  Object.keys(menu).forEach(iso => {
+    if (menuStamps[iso] || !menuDayJson(menu[iso])) return;
+    menuStamps[iso] = now;
+    stamped = true;
+  });
+  if (!stamped) return;
+  saveMenuStamps();
+  markPushPending();
+}
+
+let menuSyncBusy = null;
+function syncWithFamily() {
+  if (menuSyncBusy) return menuSyncBusy;
+  menuSyncBusy = syncWithFamilyNow().finally(() => { menuSyncBusy = null; });
+  return menuSyncBusy;
+}
+async function syncWithFamilyNow() {
+  if (!isSyncConnected()) return 'Not connected.';
+  if (hasPendingPush()) {
     await syncPush();
     if (hasPendingPush()) {
+      const message = (lastSyncPushError || 'Could not save your latest changes') + ' yet — not syncing until this succeeds, to avoid losing anything. Try Sync now once this is resolved.';
       const indicator = document.getElementById('saveIndicator');
-      if (indicator) indicator.textContent = (lastSyncPushError || 'Could not save your latest changes to the cloud') + ' yet — not syncing until this succeeds, to avoid losing anything. Try "Sync now" once resolved.';
-      return;
+      if (indicator) indicator.textContent = message;
+      return message;
     }
   }
+  const before = JSON.stringify(menu);
   const cloud = await syncPull();
-  if (cloud) applyExternalData(cloud, { preserveLocalMenu: true });
+  if (!cloud) return lastSyncPullError || 'Could not reach the family share. Check your connection.';
+  applyExternalData(cloud, { mergeMenu: true });
   if (hasPendingPush()) await syncPush();
+  if (JSON.stringify(menu) !== before) showToast('Updated from the family');
+  return 'Up to date.';
 }
-safeSyncCheck();
+syncWithFamily();
 
-// Most of the day the app just sits open in the background — if someone
-// else pushes a change while that's happening, this device would otherwise
-// never notice until it's fully closed and reopened. Checking in whenever
-// the tab becomes visible again (e.g. after switching away to read a text
-// and coming back) closes that gap without needing a live connection.
-let lastForegroundSyncCheck = Date.now();
-const FOREGROUND_SYNC_MIN_INTERVAL_MS = 300000;
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState !== 'visible') return;
+function pullMenuOnly() {
+  if (!isSyncConnected() || menuSyncBusy) return menuSyncBusy;
+  menuSyncBusy = pullMenuOnlyNow().finally(() => { menuSyncBusy = null; });
+  return menuSyncBusy;
+}
+async function pullMenuOnlyNow() {
+  if (hasPendingPush()) {
+    await syncWithFamilyNow();
+    return;
+  }
+  const { apiKey } = getSyncCreds();
+  let metaBinId = '';
+  try { metaBinId = localStorage.getItem(SYNC_META_BIN_KEY) || ''; } catch (e) { metaBinId = ''; }
+  if (!metaBinId) {
+    await syncWithFamilyNow();
+    return;
+  }
+  let meta = null;
+  try { meta = await jsonbinFetch(apiKey, metaBinId); }
+  catch (e) {
+    if (e && e.status === 404) {
+      try { localStorage.removeItem(SYNC_META_BIN_KEY); } catch (err) { /* ignore */ }
+    }
+    return;
+  }
+  if (!meta || typeof meta !== 'object') return;
+  const before = JSON.stringify(menu);
+  const merged = mergeMenuDays(menu, menuStamps, meta.menu || {}, meta.menuStamps || {}, { preferLocal: false });
+  if (JSON.stringify(merged.menu) === before && JSON.stringify(merged.stamps) === JSON.stringify(menuStamps)) return;
+  adoptMenu(merged.menu, merged.stamps);
+  if (merged.keptLocal) {
+    markPushPending();
+    await syncPush();
+  } else if (JSON.stringify(menu) !== before) {
+    showToast('Updated from the family');
+  }
+}
+
+// While Plus is open, look for a newer week often enough that the other
+// screen does not feel stuck. A phone left in the background cannot check
+// until it is opened again.
+let lastForegroundSyncCheck = 0;
+function requestFamilySync() {
+  if (document.visibilityState && document.visibilityState !== 'visible') return;
   const now = Date.now();
-  if (now - lastForegroundSyncCheck < FOREGROUND_SYNC_MIN_INTERVAL_MS) return;
+  if (now - lastForegroundSyncCheck < 8000) return;
   lastForegroundSyncCheck = now;
-  safeSyncCheck();
+  pullMenuOnly();
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestFamilySync();
 });
+window.addEventListener('focus', requestFamilySync);
+window.addEventListener('pageshow', requestFamilySync);
+setInterval(() => {
+  if (document.visibilityState !== 'visible') return;
+  pullMenuOnly();
+}, 15000);
 
 document.getElementById('searchBox').addEventListener('input', debounce(render, 150));
 document.getElementById('sortSelect').addEventListener('change', e => { sortBy = e.target.value; render(); });
